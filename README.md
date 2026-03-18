@@ -10,9 +10,9 @@ Fixings Phase 1 based on Ashlyn's Feedback:
 
 Phase 2: Authentication & Authorization
 
-Part A: Secure Registration
-Password Hashing: We implemented bcryptjs to hash passwords before storage. This ensures that even if the server data is compromised, raw passwords are never exposed.
+Part A: Designing a Secure Authentication System
+Our approach to authentication prioritizes data integrity and resistance to common web vulnerabilities. We chose 'Local Authentication' combined with 'password hashing' to protect user credentials.
 
-Salt Rounds: We used a cost factor of 10 to balance security (making it slow for hackers to guess) and performance (making it fast for users).
-
-Input Validation: The system checks for existing users to prevent duplicate account creation.
+- Password Hashing: We implemented `bcryptjs` to hash passwords before storage. This ensures that even if the server data is compromised, raw passwords are never exposed. 
+-  Salt Factor: We used a cost factor of 10 to balance security (making it computationally expensive for hackers to brute-force) and performance (ensuring a fast experience for legitimate users).
+-  User Storage: Users are currently managed in a server-side array (`users[]`), which stores unique IDs, usernames, hashed passwords, and assigned roles.
