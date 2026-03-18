@@ -25,13 +25,17 @@ const sslOptions = {
 
 //Security 
 
+
 app.use(
     helmet({
         contentSecurityPolicy: {
             directives: {
                 defaultSrc: ["'self'"],
-                styleSrc: ["'self'"], 
-                scriptSrc: ["'self'"], 
+                // To allow Google Fonts
+                styleSrc: ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+                fontSrc: ["'self'", "https://fonts.gstatic.com"],
+                // Allow scripts that have our secret nonce
+                scriptSrc: ["'self'", "'unsafe-inline'"], 
                 imgSrc: ["'self'", "data:"]
             }
         }
