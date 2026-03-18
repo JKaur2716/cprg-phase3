@@ -1,100 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Revisal</title>
-    <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Revisal – Project Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
 </head>
+ 
 <body>
-
-<header>
-    <h1>Revisal</h1>
+<div class="app">
+ 
+ 
+  <!-- Sidebar -->
+<aside class="sidebar">
+ 
+    <div class="sidebar-logo">
+<img src="" alt="Revisal" />
+</div>
+ 
     <nav>
-        <a href="#dashboard">Dashboard</a>
-        <a href="#feedback">Feedback</a>
-        <a href="#submit">Submit Feedback</a>
-    </nav>
-</header>
-
-<main>
-
-    <!-- Hero -->
-    <section class="hero">
-        <h2>Centralized Feedback for Freelancers and Clients</h2>
-        <p>
-            A secure platform that keeps project feedback organized, clear,
-            and easy to act on throughout the project lifecycle.
-        </p>
-        <button>View Dashboard</button>
-    </section>
-
-    <!-- Dashboard -->
-    <section id="dashboard" class="card">
-        <h3>Your Dashboard</h3>
-        <div class="stats">
-
-            <div class="stat-box">
-                <h4>Active Projects</h4>
-                <p>3</p>
-            </div>
-
-            <div class="stat-box">
-                <h4>Unread Feedback</h4>
-                <p>5</p>
-            </div>
-
-            <div class="stat-box">
-                <h4>Resolved Items</h4>
-                <p>12</p>
-            </div>
-
-        </div>
-    </section>
-
-    <!-- Feedback list -->
-    <section id="feedback" class="card">
-
-        <h3>Recent Feedback</h3>
-
-        <div class="feedback-item">
-            <h4>Website Redesign</h4>
-            <p>Please adjust spacing on homepage sections.</p>
-            <span class="status open">Open</span>
-        </div>
-
-        <div class="feedback-item">
-            <h4>Mobile App UI</h4>
-            <p>The navigation improvements look great.</p>
-            <span class="status resolved">Resolved</span>
-        </div>
-
-    </section>
-
-    <!-- Submit form -->
-    <section id="submit" class="card">
-
-        <h3>Submit Feedback</h3>
-
-        <form>
-
-            <label>Project Name</label>
-            <input type="text" placeholder="Enter project name">
-
-            <label>Feedback</label>
-            <textarea placeholder="Enter feedback"></textarea>
-
-            <button type="submit">Submit Feedback</button>
-
-        </form>
-
-    </section>
-
-</main>
-
-<footer>
-    <p>Capstone Project — Secure Feedback Platform Prototype</p>
-</footer>
-
+<a class="nav-link" href="#">Home</a>
+<a class="nav-link active" href="#">Project</a>
+<a class="nav-link" href="#">Calendar</a>
+<a class="nav-link" href="#">
+        Communicate
+<span class="badge">3</span>
+<span class="chevron">&#9662;</span>
+</a>
+<a class="nav-link" href="#">Services</a>
+<a class="nav-link" href="#">Notifications</a>
+<a class="nav-link" href="#">Settings</a>
+</nav>
+ 
+    <div class="sidebar-footer">
+<a class="nav-link" href="#">Help</a>
+</div>
+ 
+  </aside>
+ 
+ 
+  <!-- Main -->
+<div class="main">
+ 
+    <!-- Top bar -->
+<div class="topbar">
+<div class="greeting">
+<h1>Hello, Humann</h1>
+<p>So...which project you gonna procrastinate today?</p>
+</div>
+<div class="search">
+<span>&#128269;</span>
+<input type="text" placeholder="Search..." />
+</div>
+</div>
+ 
+    <!-- Stats -->
+<div class="stats">
+<div class="stat-card">
+<div class="label">All project</div>
+<div class="value">2</div>
+</div>
+<div class="stat-card">
+<div class="label">Initiation</div>
+<div class="value">10</div>
+</div>
+<div class="stat-card">
+<div class="label">Planning</div>
+<div class="value">4</div>
+</div>
+<div class="stat-card">
+<div class="label">Execution</div>
+<div class="value">2</div>
+</div>
+<div class="stat-card">
+<div class="label">Monitoring</div>
+<div class="value">10</div>
+</div>
+<div class="stat-card">
+<div class="label">Closure</div>
+<div class="value">4</div>
+</div>
+</div>
+ 
+    <!-- Buttons -->
+<div class="action-bar">
+<div class="buttons">
+<button class="btn">
+<span class="icon">+</span>
+          Add Project
+</button>
+<button class="btn">
+<span class="icon">+</span>
+          Add Task
+</button>
+</div>
+<button class="filter-btn" title="Filter">&#8801;</button>
+</div>
+ 
+    <!-- Project table -->
+<div class="table-wrap">
+<h2>Project</h2>
+<div class="table-scroll">
+<table>
+<thead>
+<tr>
+<th><input type="checkbox" class="cb" /></th>
+<th>Project</th>
+<th>Client</th>
+<th>Stage</th>
+<th>Progress</th>
+<th>Start Date</th>
+<th>End Date</th>
+</tr>
+</thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+</div>
+ 
+  </div>
+</div>
+ 
+ 
+<script>
+ 
+  const projects = [
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+    { name: "Art Theater Projects", client: "Raegan Frenette", stage: "Initiation", progress: 12 },
+  ];
+ 
+  const tbody = document.getElementById("rows");
+ 
+  projects.forEach(p => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+<td><input type="checkbox" class="cb" /></td>
+<td>${p.name}</td>
+<td>${p.client}</td>
+<td><span class="stage">${p.stage}</span></td>
+<td>
+<div class="progress-bar">
+<div class="progress-fill" style="width: ${p.progress}%"></div>
+</div>
+</td>
+<td class="date">MM/DD/YYYY</td>
+<td class="date">MM/DD/YYYY</td>
+    `;
+    tbody.appendChild(row);
+  });
+ 
+</script>
+ 
 </body>
 </html>
