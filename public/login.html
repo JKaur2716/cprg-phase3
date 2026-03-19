@@ -73,6 +73,19 @@
 
 <script>
   const loginForm = document.getElementById('loginForm');
+  let csrfToken = "";
+
+  // 1. Fetch the CSRF token from the server immediately on page load
+  async function getCsrf() {
+    try {
+      const response = await fetch('/get-csrf-token');
+      const data = await response.json();
+      csrfToken = data.csrfToken;
+    } catch (err) {
+      console.error("Failed to fetch CSRF token:", err);
+    }
+  }
+  getCsrf();
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault(); // Stop the page from reloading immediately
@@ -83,7 +96,10 @@
     try {
       const response = await fetch('/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'CSRF-Token': csrfToken // 2. Send the token in the header
+        },
         body: JSON.stringify({ username, password })
       });
 

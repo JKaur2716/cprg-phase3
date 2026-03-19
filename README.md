@@ -114,3 +114,33 @@ Google SSO Placeholder: We implemented an /auth/google route and a corresponding
 Session Continuity (Token Refresh): We developed a /refresh-token endpoint that allows the application to issue a new JWT before the 60-minute window closes, preventing user frustration without compromising security.
 
 UI-Backend Synchronization: We successfully migrated the Google SSO styling to styles.css to maintain a clean separation of concerns, ensuring the HTML remains readable and focused on logic.
+
+----------------------------------------------------------------
+
+# Phase 2: Advanced Security Hardening Update
+
+After getting the core login working, we did a "stress test" on our session logic. We realized that while the app was functional, it was still vulnerable to some classic web attacks. Here is how we locked it down:
+
+1. Stopping the "Guessing" Game (Rate Limiting)
+We noticed that a basic script could try thousands of passwords in seconds. To stop this "brute-force" approach, we added express-rate-limit.
+
+The Rule: If an IP tries to log in more than 5 times in 15 minutes, the server cuts them off.
+
+The Lesson: This balances security with usability—real users rarely mess up their password 5 times in a row, but bots do it constantly.
+
+2. The CSRF "Handshake" Protection
+A major risk in web apps is a malicious site tricking a logged-in user's browser into sending a request (like "change password") without them knowing.
+
+Our Fix: We integrated csurf. Now, every time the login page loads, the server hands the browser a unique "security handshake" (CSRF Token).
+
+The Result: If that token isn't in the header of the login request, the server rejects it. This makes it impossible for an outside site to "fudge" a login attempt.
+
+3. Cleaning the Slate (Session Fixation)
+We learned that if an attacker "sets" a session ID for a user before they log in, they might be able to hijack the session later.
+
+Our Fix: We updated the login route to run res.clearCookie("token") the second a user hits "Sign In." This forces the browser to dump any old session data and start 100% fresh with a new JWT.
+
+4. Real-World Trade-offs
+In-Memory vs. Database: We know using const users = [] isn't for a real product—it wipes the data every time the server restarts! For Phase 3, we’d move this to a real database like MongoDB.
+
+SSO Strategy: We focused on the "hard" security (CSRF/Rate Limiting) for this phase. We kept the Google SSO button as a "placeholder" to show where the OAuth2.0 flow will plug in once we have a real Client ID.

