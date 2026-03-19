@@ -681,3 +681,46 @@ html, body {
 .signup-nudge a:hover {
   text-decoration: underline;
 }
+
+/* PHASE 2: GOOGLE SSO BUTTON */
+
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  width: 100%;
+  padding: 13px;
+  margin-top: 6px;
+  
+  background: #ffffff;
+  color: var(--text);
+  border: 1.5px solid rgba(90, 74, 138, 0.2);
+  border-radius: 10px;
+  
+  font-family: "Lexend", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  
+
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+
+.btn-google:hover {
+  border-color: var(--purple);
+  background-color: #f9fafb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.btn-google:active {
+  transform: translateY(0);
+}
+
+.btn-google img {
+  width: 18px;
+  height: 18px;
+  margin-right: 10px;
+}
