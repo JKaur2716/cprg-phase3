@@ -29,7 +29,7 @@
       <h2>Fancy seeing you here!</h2>
       <p class="subtitle">Sign in to your Revisal account</p>
  
-      <form class="form" id="loginForm">
+      <form class="form" id="loginForm" onsubmit="return false;">
         <div class="field">
           <label for="username">Username</label> <input
             type="text"
@@ -103,8 +103,9 @@
         body: JSON.stringify({ username, password })
       });
 
-      const data = await response.json();
-
+      const contentType = response.headers.get('content-type');
+      const data = contentType && contentType.includes('application/json') 
+      ? await response.json() : { error: await response.text() };
       if (response.ok) {
         // Redirect to the dashboard if login is successful
         window.location.href = '/index.html'; 
@@ -114,7 +115,11 @@
       }
     } catch (error) {
       console.error("Login Error:", error);
-      alert("Something went wrong. Is the server running?");
+      if (error.message.includes('429')) {
+        alert("Too many login attempts. Please try again in 15 minutes.");
+      } else {
+        alert("Something went wrong. Is the server running?");
+      }
     }
   });
 </script>

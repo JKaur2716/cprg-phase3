@@ -15,7 +15,7 @@ Our approach to authentication prioritizes data integrity and resistance to comm
 
 - Password Hashing: We implemented `bcryptjs` to hash passwords before storage. This ensures that even if the server data is compromised, raw passwords are never exposed. 
 -  Salt Factor: We used a cost factor of 10 to balance security (making it computationally expensive for hackers to brute-force) and performance (ensuring a fast experience for legitimate users).
--  User Storage: Users are currently managed in a server-side array (`users[]`), which stores unique IDs, usernames, hashed passwords, and assigned roles.
+-  User Storage: We migrated from a server-side array to MongoDB using Mongoose. This was a big step for us — it meant user data actually persists when the server restarts, which kept tripping us up during testing. Each user document stores a unique ID, username, hashed password, Google ID (if they signed in via Google), and their assigned role.
 
 ---------------------------------------------
 
@@ -45,18 +45,24 @@ After building the core authentication engine, we performed a security audit and
 ### 1. Fix: Gatekeeper Middleware Application
 During testing, we discovered the `/profile` and `/dashboard` routes were still accessible without a login. 
 - The Issue: The middleware was written but not "applied" to the route definitions. 
-- The Fix: we updated the route signatures to include `authenticateJWT` and `authorizeRoles`. Now, the server intercepts every request, checks for a valid "ID card" (token) in the cookies, and rejects anyone without the correct permissions.
+- The Fix: We updated the route signatures to include `authenticateJWT` and `authorizeRoles` directly in the route definitions. Now the server intercepts every request, checks for a valid JWT cookie, and rejects anyone without the correct permissions before they ever reach the page.
+
 
 ### 2. Fix: CSP Header Violations (Helmet)
-Implementing `helmet` initially broke the UI by blocking external fonts and internal dashboard scripts.
-- The Fix: We modified the Content Security Policy (CSP) to whitelist trusted Google Font domains and enabled `'unsafe-inline'` for local script execution. This restored the "Lexend" font and allowed our dashboard logic to run safely.
+The Fix: This one took us a while to figure out. Helmet was blocking our inline scripts entirely, which meant our login form was falling back to a GET request and putting the username and password directly in the URL — not great! We consolidated all CSP directives into a single Helmet initialization that whitelists 'unsafe-inline' for scripts and allows Google Fonts domains so our "Lexend" font loads correctly.
 
 ### 3. Dynamic Dashboard Integration
 We replaced the static "Hello, Humann" placeholder with a dynamic greeting system to prove the backend connection.
 - Implementation: Using a `fetch` request to the secured `/profile` endpoint, the frontend now retrieves the logged-in user’s name from the JWT cookie and updates the greeting in real-time (e.g., "Hello, Jaspreet!!!!").
 
-### 4. Session Management (Logout)
-- Implementation: We added a secure `/logout` route that clears the HttpOnly JWT cookie. This ensures user sessions are properly destroyed and verified that the security middleware rejects access immediately after a user signs out.
+### 4. Protected Frontend Routes
+We updated `index.html` to check the `/profile` endpoint as soon as the page loads. If the server returns anything other than a 200 (meaning the JWT is missing or expired), the frontend immediately redirects the user back to `login.html`. This means the dashboard is protected on both the frontend and backend — even if someone tries to navigate directly to `index.html` without logging in, they get bounced back.
+
+### 5. Admin vs. User UI (RBAC on the Frontend)
+To make our role-based access control actually visible, we added a dynamic admin banner to the dashboard. When an admin logs in, a purple banner appears showing system status, active projects, and unread feedback — data that comes from the `/profile` endpoint. Regular users don't see this at all. It's a simple but clear way to show that the same page behaves differently depending on who's logged in.
+
+### 6. Session Management (Logout)
+- Implementation: We updated the /logout route to redirect users back to /login.html instead of returning a raw JSON message. The route clears the HttpOnly JWT cookie, destroys the session, and sends the user back to the login page cleanly.
 
 -------------------------------------------------------------
 
@@ -109,11 +115,7 @@ We tested the system by simulating "Unauthorized" access attempts (trying to vis
 
 # Phase 2: Final Summary" section:
 
-Google SSO Placeholder: We implemented an /auth/google route and a corresponding UI button to demonstrate readiness for third-party integration, fulfilling the requirement for multi-provider authentication.
-
-Session Continuity (Token Refresh): We developed a /refresh-token endpoint that allows the application to issue a new JWT before the 60-minute window closes, preventing user frustration without compromising security.
-
-UI-Backend Synchronization: We successfully migrated the Google SSO styling to styles.css to maintain a clean separation of concerns, ensuring the HTML remains readable and focused on logic.
+Google OAuth (Fully Implemented): After a lot of trial and error, we got Google OAuth fully working using Passport.js and the passport-google-oauth20 strategy. The hardest part was a session cookie issue — because we're running HTTPS locally with a self-signed certificate, the session cookie's sameSite setting needed to be set to "none" instead of "strict" to survive the redirect back from Google. Once we figured that out, everything clicked. New Google users are automatically created in MongoDB, issued a JWT cookie, and redirected to the dashboard — the same flow as regular login.
 
 ----------------------------------------------------------------
 
@@ -141,6 +143,4 @@ We learned that if an attacker "sets" a session ID for a user before they log in
 Our Fix: We updated the login route to run res.clearCookie("token") the second a user hits "Sign In." This forces the browser to dump any old session data and start 100% fresh with a new JWT.
 
 4. Real-World Trade-offs
-In-Memory vs. Database: We know using const users = [] isn't for a real product—it wipes the data every time the server restarts! For Phase 3, we’d move this to a real database like MongoDB.
-
-SSO Strategy: We focused on the "hard" security (CSRF/Rate Limiting) for this phase. We kept the Google SSO button as a "placeholder" to show where the OAuth2.0 flow will plug in once we have a real Client ID.
+In-Memory vs. Database: We completed the migration to MongoDB using Mongoose this phase. User data now fully persists across server restarts, and all registered users and their roles are stored and manageable directly through MongoDB Compass.

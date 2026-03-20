@@ -1,4 +1,4 @@
-node <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -161,14 +161,26 @@ node <!DOCTYPE html>
     try {
       const response = await fetch('/profile');
       
-      if (response.ok) {
-        const data = await response.json();
-        // This finds the <h1>Hello, Humann!!!!</h1> and updates it
-        const welcomeHeader = document.querySelector('.greeting h1');
-        if (welcomeHeader) {
-          welcomeHeader.innerText = `Hello, ${data.user}!!!!`;
-        }
+      if (!response.ok) {
+        window.location.href = '/login.html';
+        return;
       }
+
+      const data = await response.json();
+      const welcomeHeader = document.querySelector('.greeting h1');
+      if (welcomeHeader) {
+        welcomeHeader.innerText = `Hello, ${data.user}!`;
+      }
+
+      // Show admin banner if admin
+      if (data.role === 'admin') {
+        const topbar = document.querySelector('.topbar');
+        const adminBanner = document.createElement('div');
+        adminBanner.style = "background:#6c3fc5;color:white;padding:8px 16px;border-radius:8px;margin-top:10px;";
+        adminBanner.innerHTML = `⚡ Admin Access — System Status: Healthy | Active Projects: 3 | Unread Feedback: 5`;
+        topbar.appendChild(adminBanner);
+      }
+
     } catch (error) {
       console.error("Error fetching profile:", error);
     }

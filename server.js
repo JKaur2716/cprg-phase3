@@ -1,4 +1,4 @@
-const express = require("express"); 
+const express = require("express");
 const https = require("https");
 const fs = require("fs");
 const helmet = require("helmet");
@@ -8,232 +8,351 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const csrf = require("csurf");
+const mongoose = require("mongoose");
+const session = require("express-session");
+const passport = require("passport");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+require("dotenv").config();
 
 const app = express();
 
-// SSL Configuration
+const isProduction = process.env.NODE_ENV === "production";
+const cookieSecure = isProduction;
+
+// MongoDB
+mongoose
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/revisalDB")
+  .then(() => console.log("Connected to MongoDB..."))
+  .catch((err) => console.error("Could not connect to MongoDB:", err));
+
+// User model
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  password: {
+    type: String,
+    required: function () {
+      return !this.googleId;
+    },
+  },
+  role: { type: String, enum: ["user", "admin"], default: "user" },
+  googleId: { type: String },
+});
+
+const User = mongoose.model("User", userSchema);
+
+// SSL
 const keyPath = path.join(__dirname, "cert/server.key");
 const certPath = path.join(__dirname, "cert/server.cert");
 
-// Basic check so the server doesn't crash if certs are missing
 if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    console.error("ERROR: SSL Certificates not found in /cert folder!");
-    process.exit(1);
+  console.error("ERROR: SSL Certificates not found in /cert folder!");
+  process.exit(1);
 }
 
-const sslOptions = { 
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
+const sslOptions = {
+  key: fs.readFileSync(keyPath),
+  cert: fs.readFileSync(certPath),
 };
 
-//Security Middleware
+// Middleware
 
-//Brute force protection for the login route
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 5, // Limit each IP to 5 attempts
-    message: "Too many login attempts. Please try again in 15 minutes."
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:"],
+    },
+  },
+}));
+app.use(express.json());
+app.use(cookieParser());
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "dev-session-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: cookieSecure,
+      httpOnly: true,
+      sameSite: isProduction ? "strict" : "lax",
+    },
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport
+passport.serializeUser((user, done) => done(null, user.id));
+
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await User.findById(id);
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
 });
 
-// CSRF Protection Initialization
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL:
+        process.env.GOOGLE_CALLBACK_URL ||
+        "https://localhost:3000/auth/google/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        let user = await User.findOne({ googleId: profile.id });
+
+        if (!user) {
+          user = new User({
+            username: profile.displayName,
+            googleId: profile.id,
+            role: "user",
+          });
+          await user.save();
+        }
+
+        return done(null, user);
+      } catch (err) {
+        return done(err, null);
+      }
+    }
+  )
+);
+
+// CSRF
 const csrfProtection = csrf({ cookie: true });
 
-app.use(helmet()); 
-app.use(express.json()); // Essential for reading JSON bodies
-app.use(cookieParser()); // Required for CSRF and JWT cookies
-app.use(csrfProtection); // Apply CSRF protection globally
+app.use("/login", csrfProtection);
+app.use("/register", csrfProtection);
 
-// Handing out the CSRF token for the frontend to use
-app.get("/get-csrf-token", (req, res) => {
-    res.json({ csrfToken: req.csrfToken() });
+app.get("/get-csrf-token", csrfProtection, (req, res) => {
+  res.json({ csrfToken: req.csrfToken() });
 });
 
-//static file catching for css
-app.use(express.static("public", {
+// Static files
+app.use(
+  express.static("public", {
     setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.css')) {
-            res.set("Cache-Control", "public, max-age=86400");
-        }
-    }
-}));
+      if (filePath.endsWith(".css")) {
+        res.set("Cache-Control", "public, max-age=86400");
+      }
+    },
+  })
+);
 
-// Phase 2: Part B - Authentication & Role-Based Access Middleware
+// Rate limit
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Too many login attempts. Please try again in 15 minutes.",
+});
 
-//1. Checking if the user is logged in
+// Auth middleware
 const authenticateJWT = (req, res, next) => {
-    const token = req.cookies.token; //For login cookies
+  const token = req.cookies.token;
 
-    if (!token) {
-        return res.status(401).json({ error: "Access denied. Please login first"});
-    }
+  if (!token) {
+    return res.status(401).json({ error: "Access denied. Please login first." });
+  }
 
-    try {
-        //Verify the token using our secret key
-        const verified = jwt.verify(token, "super-secret-key");
-        req.user = verified; 
-        next(); 
-    } catch (error) {
-        res.status(403).json({ error: "Invalid or expired token."}); 
-    }
+  try {
+    const verified = jwt.verify(token, process.env.JWT_SECRET || "dev-secret");
+    req.user = verified;
+    next();
+  } catch (error) {
+    return res.status(403).json({ error: "Invalid or expired token." });
+  }
 };
 
-// 2. Role checking (Admin vs User)
 const authorizeRoles = (...roles) => {
-    return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({error: `Access denied. ${roles} permission required.`});
-        }
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Not authenticated." });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res
+        .status(403)
+        .json({ error: `Access denied. ${roles.join(", ")} role required.` });
+    }
+
     next();
   };
 };
 
-// Phase 2: Mock User Database
-const users = []; 
-const feedback = [
-{
-    id:1,
-    project: "Website redesign",
-    client: "Client A", 
-    freelancer: "Designer B", 
-    comment: "Please improve spacing on Homepage", 
-    status: "open"
-}, 
-{
-    id: 2, 
-    project: "Mobile app UI", 
-    client: "Client K", 
-    freelancer: "Designer J", 
-    comment: "Those colors look great now", 
-    status: "resolved"
-}]; 
+const signToken = (user) => {
+  return jwt.sign(
+    {
+      id: user._id ? user._id.toString() : user.id,
+      username: user.username,
+      role: user.role,
+    },
+    process.env.JWT_SECRET || "dev-secret",
+    { expiresIn: "1h" }
+  );
+};
 
-//cache enabling for public feedbacks
+const setTokenCookie = (res, token) => {
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: cookieSecure,
+    sameSite: isProduction ? "strict" : "lax",
+    maxAge: 3600000,
+  });
+};
 
-app.get("/feedback", (req, res) => {
-    res.set("Cache-Control", "public, max-age=600, stale-while-revalidate=120");
-    res.json(feedback);
-})
-
-// Create Feedback (No Caching Sensitive)
-
-app.post("/login", loginLimiter, async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const user = users.find(u => u.username === username);
-
-        if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ error: "Invalid credentials" });
-        }
-
-        // SESSION FIXATION MITIGATION: 
-        // We clear any existing token before issuing a fresh one upon login.
-        res.clearCookie("token");
-
-        const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role },
-            "super-secret-key", // In production, use process.env.JWT_SECRET
-            { expiresIn: "1h" }
-        );
-
-        res.cookie("token", token, {
-            httpOnly: true,
-            secure: true,
-            sameSite: "Strict",
-            maxAge: 3600000
-        });
-
-        res.json({ message: "Login successful!", role: user.role });
-    } catch (error) {
-        res.status(500).json({ error: "Internal Server Error" });
-    }
-});
-
-// Accessible to ANY authenticated user
-app.get("/profile", authenticateJWT, (req, res) => { 
-    res.set("cache-control", "no-store, private");
-    res.json({
-        message: "Welcome to your profile",
-        user: req.user.username,
-        role: req.user.role
-    });
-});
-
-// Accessible ONLY to Admins
-app.get("/dashboard", authenticateJWT, authorizeRoles("admin"), (req, res) => {
-    res.set("Cache-Control", "private, no-store");
-    res.json({
-        activeProjects: 3,
-        unreadFeedback: 5,
-        adminMessage: "System status: Healthy"
-    });
-});
-
-// Phase 2: User Registration --
+// Register
 app.post("/register", async (req, res) => {
-    try {
-        const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-        // 1. Checking existing users
-        const existingUser = users.find(u => u.username === username);
-        if (existingUser) {
-            return res.status(400).json({ error: "User already exists"});
-        }
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
 
-        // 2. Hashing the password (Security: Salt rounds = 10)
-        const hashedPassword = await bcrypt.hash(password, 10);
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists" });
+    }
 
-        // 3. Save user with a default 'user' role
-        const newUser = {
-            id: users.length + 1,
-            username,
-            password: hashedPassword, 
-            // BACKDOOR: If we register as 'Jaspreet', we get Admin rights automatically
-            role: username === "Jaspreet" ? "admin" : "user"
-        };
-        users.push(newUser);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-        res.status(201).json({message: "User registered successfully!"})
-        } catch (error) {
-            res.status(500).json({error: "Internal server error"});
-        }
-});
-
-
-// Phase 2: Part E - Logout 
-app.get("/logout", (req, res) => {
-    res.clearCookie("token");
-    res.json({ message: "Logged out successfully" });
-});
-
-
-// Google SSO Placeholder Route (because we can't get the real one yet)
-app.get("/auth/google", (req, res) => {
-    //Google handshake
-    res.send("Redirecting to Google SSO... (Mocked for Phase 2)");
-});
-
-// Phase 2: Part C = Token Refresh System
-app.post("/refresh-token", authenticateJWT, (req, res) => {
-    const newToken = jwt.sign(
-        {id: req.user.id, username: req.user.username, role: req.user.role}, 
-        "super-secret-key",
-        {expiresIn: "1h"}
-    );
-
-    res.cookie("token", newToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "Strict",
-        maxAge: 3600000
+    const newUser = new User({
+      username,
+      password: hashedPassword,
+      role: "user",
     });
-    
-    res.json({message: "token refreshed successfully!"});
+
+    await newUser.save();
+    res.status(201).json({ message: "User registered successfully!" });
+  } catch (error) {
+    console.error("Registration Error:", error);
+    res.status(500).json({ error: "Registration error" });
+  }
 });
 
+// Login
+app.post("/login", loginLimiter, async (req, res) => {
+  try {
+    const { username, password } = req.body;
 
-//Start Secure HTTPS Server
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
+
+    const user = await User.findOne({ username });
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const ok = await bcrypt.compare(password, user.password);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = signToken(user);
+    setTokenCookie(res, token);
+
+    res.json({ message: "Login successful!", role: user.role });
+  } catch (error) {
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Google OAuth
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile", "email"], prompt: "select_account" })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/login.html" }),
+  (req, res) => {
+    try {
+      const token = signToken(req.user);
+      setTokenCookie(res, token);
+      res.redirect("/index.html");
+    } catch (error) {
+      res.redirect("/login.html");
+    }
+  }
+);
+
+// Profile
+app.get("/profile", authenticateJWT, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ user: req.user.username, role: req.user.role });
+});
+
+// Dashboard
+app.get("/dashboard", authenticateJWT, (req, res) => {
+  res.set("Cache-Control", "no-store");
+
+  const baseData = {
+    message: `Welcome, ${req.user.username}!`,
+    role: req.user.role,
+  };
+
+  if (req.user.role === "admin") {
+    return res.json({
+      ...baseData,
+      adminMessage: "System status: Healthy",
+      dashboardData: "All good",
+      activeProjects: 3,
+      unreadFeedback: 5,
+    });
+  }
+
+  return res.json({
+    ...baseData,
+    yourProjects: 1,
+    notifications: "No new notifications.",
+    tip: "Contact an admin if you need more access.",
+  });
+});
+
+// Logout
+app.get("/logout", (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: cookieSecure,
+    sameSite: isProduction ? "strict" : "lax",
+  });
+
+  req.logout(() => {
+    req.session.destroy(() => {
+      res.redirect("/login.html");
+    });
+  });
+});
+
+// Refresh
+app.post("/refresh-token", authenticateJWT, (req, res) => {
+  const newToken = jwt.sign(
+    {
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
+    },
+    process.env.JWT_SECRET || "dev-secret",
+    { expiresIn: "1h" }
+  );
+
+  setTokenCookie(res, newToken);
+  res.json({ message: "Token refreshed successfully!" });
+});
 
 https.createServer(sslOptions, app).listen(3000, () => {
-    console.log("Secure server running at:");
-    console.log("https://localhost:3000");
+  console.log("Secure server running at https://localhost:3000");
 });
