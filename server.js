@@ -16,6 +16,11 @@ require("dotenv").config();
 
 const app = express();
 
+if (!process.env.JWT_SECRET || !process.env.SESSION_SECRET) {
+  console.error("FATAL: Missing required environment variables. Check your .env file.");
+  process.exit(1);
+}
+
 const isProduction = process.env.NODE_ENV === "production";
 const cookieSecure = isProduction;
 
@@ -157,6 +162,7 @@ const loginLimiter = rateLimit({
 });
 
 // Auth middleware
+
 const authenticateJWT = (req, res, next) => {
   const token = req.cookies.token;
 
@@ -165,13 +171,14 @@ const authenticateJWT = (req, res, next) => {
   }
 
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET || "dev-secret");
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
     req.user = verified;
     next();
   } catch (error) {
     return res.status(403).json({ error: "Invalid or expired token." });
   }
 };
+
 
 const authorizeRoles = (...roles) => {
   return (req, res, next) => {
@@ -221,7 +228,7 @@ app.post("/register", async (req, res) => {
 
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ error: "User already exists" });
+    return res.status(400).json({ error: "Registration failed. Please try again." });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -239,6 +246,8 @@ app.post("/register", async (req, res) => {
     res.status(500).json({ error: "Registration error" });
   }
 });
+
+
 
 // Login
 app.post("/login", loginLimiter, async (req, res) => {
@@ -259,6 +268,9 @@ app.post("/login", loginLimiter, async (req, res) => {
     if (!ok) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
+
+    
+
 
     const token = signToken(user);
     setTokenCookie(res, token);
@@ -296,8 +308,19 @@ app.get("/profile", authenticateJWT, (req, res) => {
 });
 
 // Dashboard
-app.get("/dashboard", authenticateJWT, (req, res) => {
+app.get("/dashboard", authenticateJWT, authorizeRoles("user", "admin"), (req, res) => {
   res.set("Cache-Control", "no-store");
+
+  // Admin only route
+app.get("/admin", authenticateJWT, authorizeRoles("admin"), (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    message: "Welcome to the Admin panel!",
+    systemStatus: "Healthy",
+    activeProjects: 3,
+    unreadFeedback: 5,
+  });
+});
 
   const baseData = {
     message: `Welcome, ${req.user.username}!`,

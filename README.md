@@ -1,147 +1,77 @@
-# CPRG PHASE 2
-
-Fixings Phase 1 based on Feedback: 
-
-- SSL Safety: Implemented file existence checks for certificates to prevent unhandled server crashes during startup.
-- Helmet Consolidation: Merged CSP directives into a single Helmet initialization for better middleware efficiency.
-- CSP Hardening: Removed 'unsafe-inline' from stylesheets to mitigate XSS risks. 
-- Static Asset Caching: Configured express.static with setHeaders to enforce a 24-hour cache policy for CSS files, aligning code with project documentation.
---------------------------------------------
-
-# Phase 2: Authentication & Authorization
-
-Part A: Designing a Secure Authentication System
-Our approach to authentication prioritizes data integrity and resistance to common web vulnerabilities. We chose 'Local Authentication' combined with 'password hashing' to protect user credentials.
-
-- Password Hashing: We implemented `bcryptjs` to hash passwords before storage. This ensures that even if the server data is compromised, raw passwords are never exposed. 
--  Salt Factor: We used a cost factor of 10 to balance security (making it computationally expensive for hackers to brute-force) and performance (ensuring a fast experience for legitimate users).
--  User Storage: We migrated from a server-side array to MongoDB using Mongoose. This was a big step for us — it meant user data actually persists when the server restarts, which kept tripping us up during testing. Each user document stores a unique ID, username, hashed password, Google ID (if they signed in via Google), and their assigned role.
-
----------------------------------------------
-
-# Part C: Keeping Users Logged In Securely (JWT)
-
-- Once a user logs in, we need a way to remember who they are without asking for their password on every single click. We chose JSON Web Tokens (JWT) to handle this.
-- How Login Works: When you successfully log in, the server gives you a "digital ID card" (the JWT). This card holds your username and your role (like "admin" or "user"), so the server knows exactly what you’re allowed to see.
-- Where We Store the Token: We decided to store these tokens in HttpOnly cookies rather than the browser's "localStorage."
-   - If a hacker tries to run a malicious script on our page (XSS), they can easily steal things from localStorage. But with HttpOnly, the browser will hide the cookie from JavaScript, making it way harder to steal.
-- Extra Layers of Protection: * Secure Flag: We made sure the token only travels over encrypted HTTPS connections.
-- SameSite Strict: This tells the browser: "Only send this cookie if the request is coming directly from our website." This is our main defense against CSRF attacks, where a fake site tries to trick your browser into performing actions on our server.
-
---------------------------------------------------------
-
-# Part B: Role-Based Access Control (The Gatekeeper)
-- We don't want just anyone seeing private data, so we built a "Security Guard" system called Middleware.
-- How it works: Whenever someone tries to visit a private page (like /profile), our authenticateJWT function stops them and asks: "Do you have a valid ID card (token) in your cookies?"
-- Checking Roles: Not all users are equal. We added a second check called authorizeRoles. This ensures that even if you're logged in, you can't get into the /dashboard unless your ID card specifically says you are an Admin.
-- Why this is better: It keeps our security logic in one place. Instead of writing "Are you logged in?" on every single page, we just tell the route to use our guard.
-
----------------------------------------------------------
-
-# Phase 2: Security Integration & Debugging Update
-
-After building the core authentication engine, we performed a security audit and integration pass to connect the frontend and backend securely.
-
-### 1. Fix: Gatekeeper Middleware Application
-During testing, we discovered the `/profile` and `/dashboard` routes were still accessible without a login. 
-- The Issue: The middleware was written but not "applied" to the route definitions. 
-- The Fix: We updated the route signatures to include `authenticateJWT` and `authorizeRoles` directly in the route definitions. Now the server intercepts every request, checks for a valid JWT cookie, and rejects anyone without the correct permissions before they ever reach the page.
+# Initial Setup Approach (No Cloning)
+For Phase 3, we did not clone the repository from GitHub. Instead, we reused our Phase 2 project as a foundation and built on top of it.
+The Process: We duplicated our existing Phase 2 project folder locally and renamed it to cprg-phase3. This allowed us to retain all previously working functionality while continuing development without starting from scratch.
+Repository Creation: A new repository named cprg-phase3 was created on GitHub.
+Initial Push: After opening the duplicated project in VS Code, we initialized Git, connected the project to the new repository, and pushed the entire codebase as the initial Phase 3 commit.
+## Key Insight
+One issue we encountered during this process was that the local repository was still linked to the Phase 2 remote. As a result, initial pushes were being sent to the wrong repository.
+The Fix: We updated the remote origin URL to point to the correct Phase 3 repository.
+The Lesson: Git tracks repositories through remote URLs, not folder names. Even if the project folder is renamed, it will continue pushing to the previously linked repository unless explicitly changed.
 
 
-### 2. Fix: CSP Header Violations (Helmet)
-Implementing `helmet` initially broke the UI by blocking external fonts and internal scripts.
-The Fix: This one took us a while to figure out. Helmet was blocking our inline scripts entirely, which meant our login form was falling back to a GET request and putting the username and password directly in the URL — not great! We consolidated all CSP directives into a single Helmet initialization that whitelists 'unsafe-inline' for scripts and allows Google Fonts domains so our "Lexend" font loads correctly.
+# Fixing from Phase 2 Feedback
+Following our Phase 2 feedback and security audit, we’ve implemented a series of critical patches to harden our backend and eliminate vulnerabilities that could be exploited in a production environment.
 
-### 3. Dynamic Dashboard Integration
-We replaced the static "Hello, Humann" placeholder with a dynamic greeting system to prove the backend connection.
-- Implementation: Using a `fetch` request to the secured `/profile` endpoint, the frontend now retrieves the logged-in user’s name from the JWT cookie and updates the greeting in real-time (e.g., "Hello, Jaspreet!!!!").
+## Fix: Preventing Username Enumeration (The "Side Door")
 
-### 4. Protected Frontend Routes
-We updated `index.html` to check the `/profile` endpoint as soon as the page loads. If the server returns anything other than a 200 (meaning the JWT is missing or expired), the frontend immediately redirects the user back to `login.html`. This means the dashboard is protected on both the frontend and backend — even if someone tries to navigate directly to `index.html` without logging in, they get bounced back.
+Feedback Addressed: "An attacker can hit /register to confirm which usernames exist... The fix is the same generic messaging pattern you already used on login."
 
-### 5. Admin vs. User UI (RBAC on the Frontend)
-To make our role-based access control actually visible, we added a dynamic admin banner to the dashboard. When an admin logs in, a purple banner appears showing system status, active projects, and unread feedback — data that comes from the `/profile` endpoint. Regular users don't see this at all. It's a simple but clear way to show that the same page behaves differently depending on who's logged in.
+The Issue: While our login route was secure, our registration route previously confirmed if a username was taken. This allowed attackers to "fish" for valid usernames by trying different inputs until they hit a match.
 
-### 6. Session Management (Logout)
-- Implementation: We updated the /logout route to redirect users back to /login.html instead of returning a raw JSON message. The route clears the HttpOnly JWT cookie, destroys the session, and sends the user back to the login page cleanly.
+The Fix: We updated the /register route to return a generic error: "Registration failed. Please try again." This keeps our user list private and forces an attacker to guess both the username and password blindly.
 
--------------------------------------------------------------
+## Fix: "Fail-Loud" Environment Variable Validation
 
-# Phase 2: Final Summary & Project Status
+Feedback Addressed: "Consider throwing an error here and failing loudly instead so it's never possible to access your dev vars."
 
-### The "Full Loop" Verification
-To wrap up Phase 2, we successfully verified the entire secure data cycle:
-1. The Handshake: The browser sends a POST request to `/login` with credentials.
-2. The Verification: The server hashes the incoming password and compares it to our "Mock Database."
-3. The Secure Pass: Once verified, the server issues a JWT inside a `HttpOnly` cookie.
-4. The Protection: Our middleware (`authenticateJWT`) catches every request to the dashboard. If the cookie is missing or invalid, the user is blocked.
-5. The Personalization: Once the "Gatekeeper" lets us in, our frontend `fetch` call retrieves the identity and updates the UI dynamically.
+The Issue: If the .env file was misconfigured or missing in production, the server would still attempt to run using undefined secrets or insecure defaults.
 
-### Reflection: Lessons Learned
-As beginners, this phase taught us that security is about layers. We learned that:
-- Middleware is powerful: It acts as a single point of truth for security logic.
-- CSP is strict for a reason: While debugging the "Helmet" violations was challenging, it taught us how browsers actually protect users from malicious scripts.
-- Statelessness: Using JWTs allows our server to stay fast because it doesn't have to "remember" every session in a heavy database; it just trusts the "Digital ID Card" it signed.
+The Fix: We added a FATAL check at the very top of server.js. The application now verifies that JWT_SECRET and SESSION_SECRET are present before initializing. If they are missing, the process logs a fatal error and shuts down immediately (process.exit(1)).
 
-### Final Verification Steps (For Demo)
-To demonstrate the working prototype, we follow these steps:
-1. Start the secure server (`node server.js`).
-2. Register the user via the terminal (`curl` POST to `/register`).
-3. Access the Login UI at `https://localhost:3000/login.html`.
-4. Login to trigger the redirect and dynamic greeting.
-5. Verify the `/logout` route clears the session and protects the data once again.
+## Fix: True Session Fixation Protection
 
-------------------------------------------------------------
+Feedback Addressed: "Your writeup claims you address session fixation... but there's no req.session.regenerate() call."
 
-### Phase 2 Reflection Checkpoints
+The Issue: Simply overwriting a cookie isn't enough to prevent session fixation. If a session identity isn't reset during login, an attacker could potentially "fix" a session ID on a victim's browser and hijack it once they authenticate.
 
-### Part A: Authentication Reasoning**
-We chose "Local Authentication" with Bcrypt hashing because it gives us total control over our user data and security. By using a cost factor of 10, we balanced the need for strong protection against brute-force attacks with a fast user experience. We also included a Google SSO entry point to align with modern usability standards, recognizing that many users prefer not to manage multiple passwords.
+The Fix: We overhauled the /login route to explicitly call res.clearCookie("token") and req.session.regenerate(). This wipes the old session and issues a brand-new, secure identity the moment the user logs in.
 
-### Part B: Access Control Trade-offs
-We structured our system using "Role-Based Access Control (RBAC)" with two levels: 'User' and 'Admin'. This keeps the system simple but secure. The main challenge was ensuring the middleware didn't create a "clunky" experience; we resolved this by using a central `authenticateJWT` guard that automatically checks permissions before the page even loads.
+## Fix: Enforcing Role-Based Access Control (RBAC)
 
-### Part C: Token Strategy & Security
-We chose "HttpOnly Cookies" for token storage because they are invisible to JavaScript, effectively neutralizing "XSS (Cross-Site Scripting)" attacks that target `localStorage`. To balance security and usability, we implemented a "60-minute expiry" combined with a "Token Refresh system", ensuring users aren't constantly interrupted while working.
+Feedback Addressed: "Your role authorization middleware isn't being used... provide a concrete permission matrix."
 
-### Part D: Risk Mitigation**
-To protect our users, we implemented:
-- CSRF Protection: Using `SameSite: Strict` on cookies.
-- Account Enumeration Defense: Using generic "Invalid username or password" messages so hackers can't "guess" which usernames exist.
-- Brute Force Defense: Adding Rate Limiting to the login route.
-- Session Fixation: We ensure that every login issues a brand new JWT, effectively "clearing" any old session state.
+The Implementation: We updated the /dashboard route to explicitly require the "user" or "admin" role and created a dedicated /admin route strictly for admins.
 
-### Part E: Testing Strategy
-We tested the system by simulating "Unauthorized" access attempts (trying to visit `/dashboard` without a cookie) and verified that the server correctly returned a "401 error". We also verified that "User" roles were successfully blocked from "Admin" routes with a "403 Forbidden" status.
+Permission Matrix (Role → Route Access)
 
-# Phase 2: Final Summary" section:
+Route	Method	Access Level	Description
+/register	POST	Public	Create a new account
+/login	POST	Public	Authenticate and receive JWT
+/dashboard	GET	User, Admin	General user landing page
+/admin	GET	Admin Only	System status and project management
+/profile	GET	User, Admin	Fetch personal account data
 
-Google OAuth (Fully Implemented): After a lot of trial and error, we got Google OAuth fully working using Passport.js and the passport-google-oauth20 strategy. The hardest part was a session cookie issue — because we're running HTTPS locally with a self-signed certificate, the session cookie's sameSite setting needed to be set to "none" instead of "strict" to survive the redirect back from Google. Once we figured that out, everything clicked. New Google users are automatically created in MongoDB, issued a JWT cookie, and redirected to the dashboard — the same flow as regular login.
+## 5. Admin Panel & Data Privacy
 
-----------------------------------------------------------------
+Implementation: To support our new admin-only backend route, we added a secure data endpoint to feed the admin dashboard. The new /admin route provides sensitive data like "System Status" and "Active Projects."
 
-# Phase 2: Advanced Security Hardening Update
+The Fix: We implemented a Cache-Control: no-store header on all protected routes. This prevents sensitive data from being stored in the browser's local cache, ensuring it cannot be viewed via the "Back" button after a user logs out.
 
-After getting the core login working, we did a "stress test" on our session logic. We realized that while the app was functional, it was still vulnerable to some classic web attacks. Here is how we locked it down:
+## Code Integrity & Fallback Logic
 
-1. Stopping the "Guessing" Game (Rate Limiting)
-We noticed that a basic script could try thousands of passwords in seconds. To stop this "brute-force" approach, we added express-rate-limit.
+Implementation: We cleaned up our environment logic to distinguish between development and production. By defining isProduction based on NODE_ENV, our cookies automatically switch to secure: true when we deploy, while allowing us to continue testing locally without SSL errors. This ensures a smooth and secure deployment pipeline.
 
-The Rule: If an IP tries to log in more than 5 times in 15 minutes, the server cuts them off.
+## Fix: JWT Authentication Middleware for Protected Routes
 
-The Lesson: This balances security with usability—real users rarely mess up their password 5 times in a row, but bots do it constantly.
+Issue: Protected routes such as /profile, /dashboard, and /admin were configured to use authenticateJWT, but the middleware had not been properly defined. A broken route block had been placed where the authentication middleware should have been.
 
-2. The CSRF "Handshake" Protection
-A major risk in web apps is a malicious site tricking a logged-in user's browser into sending a request (like "change password") without them knowing.
+Risk: Without a proper JWT authentication middleware, protected routes cannot securely verify whether a user is logged in, which breaks access control and weakens backend security.
 
-Our Fix: We integrated csurf. Now, every time the login page loads, the server hands the browser a unique "security handshake" (CSRF Token).
+Fix Implemented: We replaced the broken route block with a dedicated authenticateJWT middleware function. This middleware now:
 
-The Result: If that token isn't in the header of the login request, the server rejects it. This makes it impossible for an outside site to "fudge" a login attempt.
+reads the JWT from the HTTP-only cookie
+verifies the token using JWT_SECRET
+attaches the decoded user information to req.user
+blocks access if the token is missing, invalid, or expired
 
-3. Cleaning the Slate (Session Fixation)
-We learned that if an attacker "sets" a session ID for a user before they log in, they might be able to hijack the session later.
-
-Our Fix: We updated the login route to run res.clearCookie("token") the second a user hits "Sign In." This forces the browser to dump any old session data and start 100% fresh with a new JWT.
-
-4. Real-World Trade-offs
-In-Memory vs. Database: We completed the migration to MongoDB using Mongoose this phase. User data now fully persists across server restarts, and all registered users and their roles are stored and manageable directly through MongoDB Compass.
+Result: All protected routes now use a valid centralized authentication layer before role-based checks are applied.
