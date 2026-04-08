@@ -134,3 +134,13 @@ Even with validation and sanitization in place, user input can still become dang
 Instead of injecting raw HTML, the application updates the interface using JavaScript text-based rendering. This avoids executing any unintended scripts that may have been submitted as input.
 
 By ensuring that user data is treated strictly as text and not executable code, we reduce the risk of Cross-Site Scripting (XSS) attacks. This step complements validation and sanitization by adding an additional layer of protection at the output stage.
+
+## Encryption of Sensitive Data
+
+After implementing validation and sanitization, the next step was protecting sensitive profile data before storing it in the database. The assignment required fields such as email and bio to be secured at rest rather than being stored in plain text.
+
+To implement this, we used Node.js’s built-in ⁠ crypto ⁠ module with the AES-256-CBC encryption algorithm. Before profile updates are saved, the email and bio values are encrypted on the server. This means that even if the database is accessed directly, the stored values are not readable in plain text.
+
+When the profile is loaded through the protected ⁠ /profile ⁠ route, the encrypted values are decrypted before being sent back to the dashboard. This allows the user to see normal readable information in the interface while still keeping the stored data protected.
+
+This step strengthened the privacy of user information and ensured that sensitive data is protected both in transit through HTTPS and at rest inside the database.

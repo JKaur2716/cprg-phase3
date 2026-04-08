@@ -13,9 +13,47 @@ const session = require("express-session");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const { body, validationResult } = require("express-validator");
+const crypto = require("crypto");
 require("dotenv").config();
 
 const app = express();
+
+const algorithm = "aes-256-cbc";
+const secretKey = crypto
+  .createHash("sha256")
+  .update(process.env.ENCRYPTION_KEY || "phase3_default_secret_key")
+  .digest();
+const ivLength = 16;
+
+function encrypt(text) {
+  if (!text) return "";
+
+  const iv = crypto.randomBytes(ivLength);
+  const cipher = crypto.createCipheriv(algorithm, secretKey, iv);
+
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+
+  return iv.toString("hex") + ":" + encrypted;
+}
+
+function decrypt(text) {
+  if (!text) return "";
+
+  const parts = text.split(":");
+  if (parts.length !== 2) return text;
+
+  const iv = Buffer.from(parts[0], "hex");
+  const encryptedText = parts[1];
+
+  const decipher = crypto.createDecipheriv(algorithm, secretKey, iv);
+
+  let decrypted = decipher.update(encryptedText, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+
+  return decrypted;
+}
+
 
 if (!process.env.JWT_SECRET || !process.env.SESSION_SECRET) {
   console.error("FATAL: Missing required environment variables. Check your .env file.");
@@ -343,13 +381,14 @@ app.get("/profile", authenticateJWT, async (req, res) => {
       return res.status(404).json({ error: "User not found." });
     }
 
-    res.json({
-      user: currentUser.username,
-      name: currentUser.name,
-      email: currentUser.email,
-      bio: currentUser.bio,
-      role: currentUser.role,
-    });
+  res.json({
+  user: currentUser.username,
+  name: currentUser.name,
+  email: currentUser.email ? decrypt(currentUser.email) : "",
+  bio: currentUser.bio ? decrypt(currentUser.bio) : "",
+  role: currentUser.role,
+  });
+
   } catch (error) {
     res.status(500).json({ error: "Failed to load profile." });
   }
@@ -383,9 +422,7 @@ app.post(
       .withMessage("Bio is required.")
       .isLength({ max: 500 })
       .withMessage("Bio must not exceed 500 characters.")
-      .matches(/^[A-Za-z0-9\s.,!?'-]+$/)
-      .withMessage("Bio can only contain letters, numbers, and spaces.")
-      .escape(),``
+      .escape(),
   ],
   async (req, res) => {
     try {
@@ -398,10 +435,12 @@ app.post(
       }
 
       const { name, email, bio } = req.body;
+      const encryptedEmail = encrypt(email);
+      const encryptedBio = encrypt(bio);
 
       const updatedUser = await User.findByIdAndUpdate(
         req.user.id,
-        { name, email, bio },
+        { name, email: encryptedEmail, bio: encryptedBio },
         { new: true }
       ).select("username name email bio role");
 
