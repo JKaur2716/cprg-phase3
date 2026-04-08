@@ -144,3 +144,56 @@ To implement this, we used Node.js’s built-in ⁠ crypto ⁠ module with t
 When the profile is loaded through the protected ⁠ /profile ⁠ route, the encrypted values are decrypted before being sent back to the dashboard. This allows the user to see normal readable information in the interface while still keeping the stored data protected.
 
 This step strengthened the privacy of user information and ensured that sensitive data is protected both in transit through HTTPS and at rest inside the database.
+
+
+# Security Testing and Debugging
+
+After implementing validation, sanitization, and safe output handling, we tested the application with a range of inputs to confirm that all security measures were working as expected.
+
+### XSS (cross-site scripting) testing
+
+To test XSS protection, a script payload was entered into the bio field:
+
+
+<script>alert(1)</script>
+
+
+The script did not execute. Instead, it was stored and displayed in encoded form:
+
+
+&lt;script&gt;alert(1)&lt;&#x2F;script&gt;
+
+
+This confirms the input was treated as plain text rather than executable code. The protection comes from two places: ⁠ express-validator ⁠'s ⁠ .escape() ⁠ on the backend, which encodes special characters before they are stored, and safe frontend rendering, which outputs data as text rather than raw HTML.
+
+---
+
+### Input validation testing
+
+Each field was tested with invalid inputs to verify the validation rules were enforced correctly.
+
+•⁠  ⁠*Name* — inputs like "J", "J@spreet", and "12345" were rejected, confirming the field only accepts alphabetic characters within the required length.
+•⁠  ⁠*Email* — formats like "abc", "test@", and "hello.com" were rejected, confirming only properly structured email addresses are accepted.
+•⁠  ⁠*Bio* — inputs exceeding 500 characters were blocked before submission, confirming the character limit is enforced.
+
+All invalid inputs were rejected before reaching the database. Error messages were returned to the client without exposing any internal details.
+
+
+### Debugging during testing
+
+During testing, we also encountered a validation error caused by an overly strict regex on the bio field. The original pattern blocked common punctuation like ⁠ ? ⁠ in natural sentences. This was caught through browser dev tools by reading the exact error message returned in the response body. The fix was to remove the unnecessary ⁠ .matches() ⁠ rule, since ⁠ .escape() ⁠ already handles sanitization. This process reinforced the value of reading exact server responses when debugging validation issues.
+
+
+### Conclusion
+
+These tests confirmed that the application correctly validates user input, sanitizes potentially harmful data, and prevents malicious scripts from executing in the browser. The combination of backend validation and safe frontend rendering ensures the system handles user input securely under different scenarios.
+
+### Encryption Testing
+
+To verify that sensitive data is securely stored, we tested the encryption of profile fields after updating user information.
+
+After submitting the profile update form with valid email and bio values, we checked the database using MongoDB Compass. The email and bio fields were not stored in plain text. Instead, they appeared as encrypted strings, confirming that encryption was applied before storage.
+
+We then refreshed the dashboard, where the same values were displayed in a readable format. This confirmed that the application correctly decrypts the data before sending it to the frontend.
+
+This test verifies that sensitive user data is protected at rest while still remaining usable within the application.
