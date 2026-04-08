@@ -64,28 +64,30 @@
   </div>
 
   <div class="profile-card">
-    <h2>Update Profile</h2>
-    <p>This placeholder form prepares the dashboard for the secure profile update feature in the next step.</p>
+  <h2>Update Profile</h2>
+  <p>Update your account details below. Your changes will be saved to your profile.</p>
 
-    <form id="profilePlaceholderForm">
-      <div class="field">
-        <label for="fullName">Name</label>
-        <input type="text" id="fullName" placeholder="Enter your name" disabled />
-      </div>
+  <form id="profileForm">
+    <div class="field">
+      <label for="fullName">Name</label>
+      <input type="text" id="fullName" name="name" placeholder="Enter your name" />
+    </div>
 
-      <div class="field">
-        <label for="emailField">Email</label>
-        <input type="email" id="emailField" placeholder="Enter your email" disabled />
-      </div>
+    <div class="field">
+      <label for="emailField">Email</label>
+      <input type="email" id="emailField" name="email" placeholder="Enter your email" />
+    </div>
 
-      <div class="field">
-        <label for="bioField">Bio</label>
-        <textarea id="bioField" placeholder="Write a short bio" disabled></textarea>
-      </div>
+    <div class="field">
+      <label for="bioField">Bio</label>
+      <textarea id="bioField" name="bio" placeholder="Write a short bio"></textarea>
+    </div>
 
-      <button type="button" class="btn-submit" disabled>Update Profile</button>
-    </form>
-  </div>
+    <button type="submit" class="btn-submit">Update Profile</button>
+  </form>
+
+  <p id="profileMessage" style="margin-top:12px;font-weight:600;"></p>
+</div>
 </section>
 
     <!-- Stats -->
@@ -215,6 +217,10 @@
     document.getElementById("profileEmail").innerText = data.email || "Not available";
     document.getElementById("profileBio").innerText = data.bio || "No bio added yet.";
 
+    document.getElementById("fullName").value = data.name || "";
+    document.getElementById("emailField").value = data.email || "";
+    document.getElementById("bioField").value = data.bio || "";
+
     // Admin banner
     if (data.role === 'admin') {
       const topbar = document.querySelector('.topbar');
@@ -229,8 +235,46 @@
     window.location.href = '/login.html';
   }
 }
+const profileForm = document.getElementById("profileForm");
+const profileMessage = document.getElementById("profileMessage");
 
-  // Call the function as soon as the page loads
+async function updateProfile(event) {
+  event.preventDefault();
+
+  const name = document.getElementById("fullName").value;
+  const email = document.getElementById("emailField").value;
+  const bio = document.getElementById("bioField").value;
+
+  try {
+    const response = await fetch("/update-profile", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  credentials: "same-origin",
+  body: JSON.stringify({ name, email, bio })
+  });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      profileMessage.style.color = "crimson";
+      profileMessage.innerText = data.error || "Profile update failed.";
+      return;
+    }
+
+    profileMessage.style.color = "green";
+    profileMessage.innerText = data.message || "Profile updated successfully.";
+
+    await loadUserProfile();
+  } catch (error) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Something went wrong while updating the profile.";
+  }
+}
+
+profileForm.addEventListener("submit", updateProfile);
+ 
   loadUserProfile();
 </script>
  

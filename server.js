@@ -353,6 +353,38 @@ app.get("/profile", authenticateJWT, async (req, res) => {
     res.status(500).json({ error: "Failed to load profile." });
   }
 });
+
+app.post("/update-profile", authenticateJWT, async (req, res) => {
+  try {
+    const { name, email, bio } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      { name, email, bio },
+      { new: true }
+    ).select("username name email bio role");
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    res.set("Cache-Control", "no-store");
+
+    res.json({
+      message: "Profile updated successfully.",
+      user: {
+        username: updatedUser.username,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        bio: updatedUser.bio,
+        role: updatedUser.role,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update profile." });
+  }
+});
+
 // Dashboard
 app.get("/dashboard", authenticateJWT, authorizeRoles("user", "admin"), (req, res) => {
   res.set("Cache-Control", "no-store");

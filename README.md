@@ -108,3 +108,12 @@ With the backend ready to serve profile data, the next step was building the das
 ### Why this matters
 
 Loading profile data directly from the ⁠ /profile ⁠ route means the dashboard is always tied to the authenticated session. No user data is hard-coded on the client side, and the page only renders what the server returns for the logged-in user. This keeps the interface consistent with the backend authentication and access control built in Phase 2.
+
+## Adding the Profile Update Route
+
+After building the dashboard form, the next step was connecting it to the backend so profile changes could actually be saved. To do this, we added a protected ⁠ /update-profile ⁠ route in ⁠ server.js ⁠.
+
+This route updates the currently authenticated user’s profile fields in the database, including name, email, and bio. Because it uses the existing authentication middleware, the route only updates the record that belongs to the logged-in user. This prevents one user from modifying another user’s profile data.
+
+We tested to see if the profile will update and it did not only the message said "Profile updated successfully" - but the new changes actually showed up in MongoDB Compass as well. 
+
