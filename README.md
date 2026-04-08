@@ -91,3 +91,20 @@ Result: All protected routes now use a valid centralized authentication layer be
 ### Why this was done first
 The dashboard interface and profile update form built in later steps both depend on the backend being able to store and return user-specific data. Completing this backend step first gave us a clean foundation to build on - all subsequent Phase 3 features, including secure profile updating, input validation, output encoding, and data encryption, rely on these schema fields being in place.
 
+## Building the User Dashboard
+
+With the backend ready to serve profile data, the next step was building the dashboard interface that users see after logging in. The goal was to move beyond a basic post-login screen and display real, user-specific information pulled securely from the server.
+
+### What was built
+
+*1. Profile data display* — The dashboard was updated to fetch the authenticated user's data from the protected ⁠ /profile ⁠ route and render it on the page. This includes the user's ⁠ username ⁠, ⁠ name ⁠, ⁠ email ⁠, and ⁠ bio ⁠, along with a personalized greeting. Because this data is loaded from the server after authentication, the page always reflects the currently logged-in user rather than any hard-coded or shared values.
+
+*2. Logout button* — A logout option was kept visible on the dashboard so users can securely end their session at any time without navigating away.
+
+*3. Profile update form placeholder* — A profile editing form was added to the dashboard at this stage. This was done intentionally — it satisfies the Phase 3 requirement for a profile editing area while keeping the interface ready for the secure update logic implemented in the next step.
+
+---
+
+### Why this matters
+
+Loading profile data directly from the ⁠ /profile ⁠ route means the dashboard is always tied to the authenticated session. No user data is hard-coded on the client side, and the page only renders what the server returns for the logged-in user. This keeps the interface consistent with the backend authentication and access control built in Phase 2.

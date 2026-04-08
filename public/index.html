@@ -44,8 +44,8 @@
     <!-- Top bar -->
 <div class="topbar">
 <div class="greeting">
-<h1>Hello, Humann!!!!</h1>
-<p>I am ready to work when you are!</p>
+  <h1>Hello, Loading...</h1>
+  <p>Your personal dashboard is ready.</p>
 </div>
 <div class="search">
 <span>&#128269;</span>
@@ -53,6 +53,41 @@
 </div>
 </div>
  
+<!-- Profile Summary -->
+<section class="profile-summary">
+  <div class="profile-card">
+    <h2>Your Profile</h2>
+    <p><strong>Username:</strong> <span id="profileUsername">Loading...</span></p>
+    <p><strong>Name:</strong> <span id="profileName">Loading...</span></p>
+    <p><strong>Email:</strong> <span id="profileEmail">Loading...</span></p>
+    <p><strong>Bio:</strong> <span id="profileBio">No bio added yet.</span></p>
+  </div>
+
+  <div class="profile-card">
+    <h2>Update Profile</h2>
+    <p>This placeholder form prepares the dashboard for the secure profile update feature in the next step.</p>
+
+    <form id="profilePlaceholderForm">
+      <div class="field">
+        <label for="fullName">Name</label>
+        <input type="text" id="fullName" placeholder="Enter your name" disabled />
+      </div>
+
+      <div class="field">
+        <label for="emailField">Email</label>
+        <input type="email" id="emailField" placeholder="Enter your email" disabled />
+      </div>
+
+      <div class="field">
+        <label for="bioField">Bio</label>
+        <textarea id="bioField" placeholder="Write a short bio" disabled></textarea>
+      </div>
+
+      <button type="button" class="btn-submit" disabled>Update Profile</button>
+    </form>
+  </div>
+</section>
+
     <!-- Stats -->
 <div class="stats">
 <div class="stat-card">
@@ -158,33 +193,42 @@
 
 
  async function loadUserProfile() {
-    try {
-      const response = await fetch('/profile');
-      
-      if (!response.ok) {
-        window.location.href = '/login.html';
-        return;
-      }
+  try {
+    const response = await fetch('/profile');
 
-      const data = await response.json();
-      const welcomeHeader = document.querySelector('.greeting h1');
-      if (welcomeHeader) {
-        welcomeHeader.innerText = `Hello, ${data.user}!`;
-      }
-
-      // Show admin banner if admin
-      if (data.role === 'admin') {
-        const topbar = document.querySelector('.topbar');
-        const adminBanner = document.createElement('div');
-        adminBanner.style = "background:#6c3fc5;color:white;padding:8px 16px;border-radius:8px;margin-top:10px;";
-        adminBanner.innerHTML = `⚡ Admin Access — System Status: Healthy | Active Projects: 3 | Unread Feedback: 5`;
-        topbar.appendChild(adminBanner);
-      }
-
-    } catch (error) {
-      console.error("Error fetching profile:", error);
+    if (!response.ok) {
+      window.location.href = '/login.html';
+      return;
     }
+
+    const data = await response.json();
+
+    // Update greeting
+    const welcomeHeader = document.querySelector('.greeting h1');
+    if (welcomeHeader) {
+      welcomeHeader.innerText = `Hello, ${data.name || data.user}!`;
+    }
+
+    // Fill profile section
+    document.getElementById("profileUsername").innerText = data.user || "Not available";
+    document.getElementById("profileName").innerText = data.name || "Not available";
+    document.getElementById("profileEmail").innerText = data.email || "Not available";
+    document.getElementById("profileBio").innerText = data.bio || "No bio added yet.";
+
+    // Admin banner
+    if (data.role === 'admin') {
+      const topbar = document.querySelector('.topbar');
+      const adminBanner = document.createElement('div');
+      adminBanner.style = "background:#6c3fc5;color:white;padding:8px 16px;border-radius:8px;margin-top:10px;";
+      adminBanner.innerHTML = `⚡ Admin Access — System Status: Healthy | Active Projects: 3 | Unread Feedback: 5`;
+      topbar.appendChild(adminBanner);
+    }
+
+  } catch (error) {
+    console.error("Error fetching profile:", error);
+    window.location.href = '/login.html';
   }
+}
 
   // Call the function as soon as the page loads
   loadUserProfile();
