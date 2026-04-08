@@ -73,11 +73,12 @@ app.use(helmet({
   },
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "dev-session-secret",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -203,7 +204,7 @@ const signToken = (user) => {
       username: user.username,
       role: user.role,
     },
-    process.env.JWT_SECRET || "dev-secret",
+    process.env.JWT_SECRET,
     { expiresIn: "1h" }
   );
 };
@@ -250,6 +251,7 @@ app.post("/register", async (req, res) => {
 
 
 // Login
+
 app.post("/login", loginLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -269,17 +271,30 @@ app.post("/login", loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    
+    // ✅ clear old token
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: cookieSecure,
+      sameSite: isProduction ? "strict" : "lax",
+    });
 
+    // ✅ regenerate session
+    req.session.regenerate((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Session regeneration failed" });
+      }
 
-    const token = signToken(user);
-    setTokenCookie(res, token);
+      const token = signToken(user);
+      setTokenCookie(res, token);
 
-    res.json({ message: "Login successful!", role: user.role });
+      res.json({ message: "Login successful!", role: user.role });
+    });
+
   } catch (error) {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
 
 // Google OAuth
 app.get(
@@ -311,17 +326,6 @@ app.get("/profile", authenticateJWT, (req, res) => {
 app.get("/dashboard", authenticateJWT, authorizeRoles("user", "admin"), (req, res) => {
   res.set("Cache-Control", "no-store");
 
-  // Admin only route
-app.get("/admin", authenticateJWT, authorizeRoles("admin"), (req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.json({
-    message: "Welcome to the Admin panel!",
-    systemStatus: "Healthy",
-    activeProjects: 3,
-    unreadFeedback: 5,
-  });
-});
-
   const baseData = {
     message: `Welcome, ${req.user.username}!`,
     role: req.user.role,
@@ -342,6 +346,17 @@ app.get("/admin", authenticateJWT, authorizeRoles("admin"), (req, res) => {
     yourProjects: 1,
     notifications: "No new notifications.",
     tip: "Contact an admin if you need more access.",
+  });
+});
+
+// Admin
+app.get("/admin", authenticateJWT, authorizeRoles("admin"), (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    message: "Welcome to the Admin panel!",
+    systemStatus: "Healthy",
+    activeProjects: 3,
+    unreadFeedback: 5,
   });
 });
 
@@ -368,7 +383,7 @@ app.post("/refresh-token", authenticateJWT, (req, res) => {
       username: req.user.username,
       role: req.user.role,
     },
-    process.env.JWT_SECRET || "dev-secret",
+    process.env.JWT_SECRET,
     { expiresIn: "1h" }
   );
 
