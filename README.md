@@ -117,3 +117,20 @@ This route updates the currently authenticated user’s profile fields in the da
 
 We tested to see if the profile will update and it did not only the message said "Profile updated successfully" - but the new changes actually showed up in MongoDB Compass as well. 
 
+## Input Validation and Sanitization
+
+After making the profile update form functional, the next step was ensuring that it only accepts safe and expected input. Since users can submit their own data, this part was important to prevent malformed or malicious values from being stored in the database.
+
+We implemented validation using the ⁠ express-validator ⁠ library in the ⁠ /update-profile ⁠ route. Each field was checked against strict rules based on the assignment requirements. The name field was limited to 3–50 alphabetic characters and spaces, the email field was validated using a standard email format, and the bio field was restricted to a maximum of 500 characters with only safe characters allowed.
+
+In addition to validation, we applied sanitization to all inputs. Values were trimmed to remove unnecessary whitespace, emails were normalized into a consistent format, and escaping was applied to reduce the risk of unsafe characters being stored directly.
+
+This ensured that only clean, expected data is accepted by the application and prevented issues such as malformed input or attempts to inject unwanted content into the system.                                                                                                             
+
+## Output Encoding and XSS Protection
+
+Even with validation and sanitization in place, user input can still become dangerous if it is rendered directly in the browser without proper handling. To prevent this, we ensured that all profile data displayed on the dashboard is safely handled before being inserted into the page.
+
+Instead of injecting raw HTML, the application updates the interface using JavaScript text-based rendering. This avoids executing any unintended scripts that may have been submitted as input.
+
+By ensuring that user data is treated strictly as text and not executable code, we reduce the risk of Cross-Site Scripting (XSS) attacks. This step complements validation and sanitization by adding an additional layer of protection at the output stage.

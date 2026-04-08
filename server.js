@@ -12,6 +12,7 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const { body, validationResult } = require("express-validator");
 require("dotenv").config();
 
 const app = express();
@@ -354,36 +355,78 @@ app.get("/profile", authenticateJWT, async (req, res) => {
   }
 });
 
-app.post("/update-profile", authenticateJWT, async (req, res) => {
-  try {
-    const { name, email, bio } = req.body;
+app.post(
+  "/update-profile",
+  authenticateJWT,
+  [
+    body("name")
+      .trim()
+      .notEmpty()
+      .withMessage("Name is required.")
+      .isLength({ min: 3, max: 50 })
+      .withMessage("Name must be between 3 and 50 characters.")
+      .matches(/^[A-Za-z\s]+$/)
+      .withMessage("Name can only contain alphabetic characters and spaces.")
+      .escape(),
 
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      { name, email, bio },
-      { new: true }
-    ).select("username name email bio role");
+    body("email")
+      .trim()
+      .notEmpty()
+      .withMessage("Email is required.")
+      .isEmail()
+      .withMessage("Please enter a valid email address.")
+      .normalizeEmail(),
 
-    if (!updatedUser) {
-      return res.status(404).json({ error: "User not found." });
+    body("bio")
+      .trim()
+      .notEmpty()
+      .withMessage("Bio is required.")
+      .isLength({ max: 500 })
+      .withMessage("Bio must not exceed 500 characters.")
+      .matches(/^[A-Za-z0-9\s.,!?'-]+$/)
+      .withMessage("Bio can only contain letters, numbers, and spaces.")
+      .escape(),``
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          error: errors.array()[0].msg,
+        });
+      }
+
+      const { name, email, bio } = req.body;
+
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user.id,
+        { name, email, bio },
+        { new: true }
+      ).select("username name email bio role");
+
+      if (!updatedUser) {
+        return res.status(404).json({ error: "User not found." });
+      }
+
+      res.set("Cache-Control", "no-store");
+
+      res.json({
+        message: "Profile updated successfully.",
+        user: {
+          username: updatedUser.username,
+          name: updatedUser.name,
+          email: updatedUser.email,
+          bio: updatedUser.bio,
+          role: updatedUser.role,
+        },
+      });
+    } catch (error) {
+      console.error("Update Profile Error:", error);
+      res.status(500).json({ error: "Failed to update profile." });
     }
-
-    res.set("Cache-Control", "no-store");
-
-    res.json({
-      message: "Profile updated successfully.",
-      user: {
-        username: updatedUser.username,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        bio: updatedUser.bio,
-        role: updatedUser.role,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update profile." });
   }
-});
+);
 
 // Dashboard
 app.get("/dashboard", authenticateJWT, authorizeRoles("user", "admin"), (req, res) => {
