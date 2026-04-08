@@ -75,3 +75,19 @@ attaches the decoded user information to req.user
 blocks access if the token is missing, invalid, or expired
 
 Result: All protected routes now use a valid centralized authentication layer before role-based checks are applied.
+
+# NEW ADDITIONS FOR PHASE 3
+
+## Step 1
+
+1. User schema — The mongoose.Schema was updated to include three new optional fields: name, email, and bio, each defaulting to an empty string. This ensures existing accounts are not broken by the migration, while new accounts are created with the fields present from the start.
+
+2 Registration route — The /register route was updated so that when a new user is created, the name field is pre-populated with the chosen username. The email and bio fields are initialized as empty strings, ready to be filled in through the profile form.
+
+3 Google OAuth strategy — The Google strategy was updated to match. When a user signs in with Google for the first time and a new account is created, the name field is set from profile.displayName. Email and bio default to empty strings, consistent with the local registration flow.
+
+4 Profile route — The GET /profile route was refactored from a simple synchronous response to an async database query. It now uses User.findById(req.user.id) to retrieve the authenticated user's full record and returns all four profile fields: username, name, email, bio, and role. A 404 is returned if the user no longer exists, and a 500 is returned on database error.
+
+### Why this was done first
+The dashboard interface and profile update form built in later steps both depend on the backend being able to store and return user-specific data. Completing this backend step first gave us a clean foundation to build on - all subsequent Phase 3 features, including secure profile updating, input validation, output encoding, and data encryption, rely on these schema fields being in place.
+

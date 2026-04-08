@@ -33,13 +33,22 @@ mongoose
 // User model
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
+
+  name: { type: String, default: "" },
+
+  email: { type: String, default: "" },
+
+  bio: { type: String, default: "" },
+
   password: {
     type: String,
     required: function () {
       return !this.googleId;
     },
   },
+
   role: { type: String, enum: ["user", "admin"], default: "user" },
+
   googleId: { type: String },
 });
 
@@ -119,10 +128,13 @@ passport.use(
 
         if (!user) {
           user = new User({
-            username: profile.displayName,
-            googleId: profile.id,
-            role: "user",
-          });
+  username: profile.displayName,
+  name: profile.displayName || "",
+  email: "",
+  bio: "",
+  googleId: profile.id,
+  role: "user",
+});
           await user.save();
         }
 
@@ -235,10 +247,13 @@ app.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
-      username,
-      password: hashedPassword,
-      role: "user",
-    });
+  username,
+  name: username,
+  email: "",
+  bio: "",
+  password: hashedPassword,
+  role: "user",
+});
 
     await newUser.save();
     res.status(201).json({ message: "User registered successfully!" });
@@ -317,11 +332,27 @@ app.get(
 );
 
 // Profile
-app.get("/profile", authenticateJWT, (req, res) => {
-  res.set("Cache-Control", "no-store");
-  res.json({ user: req.user.username, role: req.user.role });
-});
+app.get("/profile", authenticateJWT, async (req, res) => {
+  try {
+    res.set("Cache-Control", "no-store");
 
+    const currentUser = await User.findById(req.user.id).select("username name email bio role");
+
+    if (!currentUser) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    res.json({
+      user: currentUser.username,
+      name: currentUser.name,
+      email: currentUser.email,
+      bio: currentUser.bio,
+      role: currentUser.role,
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to load profile." });
+  }
+});
 // Dashboard
 app.get("/dashboard", authenticateJWT, authorizeRoles("user", "admin"), (req, res) => {
   res.set("Cache-Control", "no-store");
