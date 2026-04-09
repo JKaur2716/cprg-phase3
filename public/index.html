@@ -278,6 +278,32 @@ async function updateProfile(event) {
   const name = document.getElementById("fullName").value;
   const email = document.getElementById("emailField").value;
   const bio = document.getElementById("bioField").value;
+  
+  if (name.length < 3 || name.length > 50) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Name must be between 3 and 50 characters.";
+    return;
+  }
+  if (!/^[A-Za-z\s]+$/.test(name)) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Name can only contain letters and spaces.";
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Please enter a valid email address.";
+    return;
+  }
+  if (bio.length === 0) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Bio cannot be empty.";
+    return;
+  }
+  if (bio.length > 500) {
+    profileMessage.style.color = "crimson";
+    profileMessage.innerText = "Bio must not exceed 500 characters.";
+    return;
+  }
 
   try {
     const response = await fetch("/update-profile", {
