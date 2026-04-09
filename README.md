@@ -119,22 +119,16 @@ We tested to see if the profile will update and it did not only the message said
 
 ## CSRF Protection
 
-Cross-Site Request Forgery (CSRF) attacks trick an authenticated user's browser 
-into making an unintended request to the server. To prevent this, we use the 
-csurf middleware.
+Cross-Site Request Forgery (CSRF) attacks trick an authenticated user's browser into making an unintended request to the server. To prevent this, we use the csurf middleware.
 
 CSRF protection is applied to three routes:
 •⁠  ⁠POST /login
 •⁠  ⁠POST /register
 •⁠  ⁠POST /update-profile
 
-On page load, the client fetches a unique token from GET /get-csrf-token and 
-stores it in memory. Every POST request includes this token in the CSRF-Token 
-request header. The server validates the token before processing the request — 
-if it is missing or incorrect, the request is rejected with a 403 error.
+On page load, the client fetches a unique token from GET /get-csrf-token and  stores it in memory. Every POST request includes this token in the CSRF-Token request header. The server validates the token before processing the request — if it is missing or incorrect, the request is rejected with a 403 error.
 
-Because the token is tied to the user's session and changes on every page load, 
-an attacker cannot forge a valid request from a third-party site.
+Because the token is tied to the user's session and changes on every page load, an attacker cannot forge a valid request from a third-party site.
 
 ## Input Validation and Sanitization
 
@@ -190,7 +184,10 @@ The script did not execute. Instead, it was stored and displayed in encoded form
 
 This confirms the input was treated as plain text rather than executable code. The protection comes from two places: ⁠ express-validator ⁠'s ⁠ .escape() ⁠ on the backend, which encodes special characters before they are stored, and safe frontend rendering, which outputs data as text rather than raw HTML.
 
----
+The project table is also built using createElement and textContent rather than 
+innerHTML, so even if a project name contained a script tag it would render as 
+visible text and never execute in the browser.
+
 
 ### Input validation testing
 
@@ -222,3 +219,42 @@ We then refreshed the dashboard, where the same values were displayed in a reada
 
 This test verifies that sensitive user data is protected at rest while still remaining usable within the application.
 
+#  Part C Third Part Dependency Management
+
+We used the ⁠ npm audit ⁠ tool to analyze the security of third-party dependencies used in the project.
+
+The audit identified two low severity vulnerabilities related to the ⁠ cookie ⁠ package, which is a dependency of the ⁠ csurf ⁠ library. These vulnerabilities originate from indirect dependencies rather than our own code.
+
+We attempted to resolve issues using ⁠ npm audit fix ⁠, which addressed all fixable vulnerabilities. However, the remaining issues could not be automatically resolved without forcing major dependency changes that could break application functionality.
+
+Since these vulnerabilities are low severity and come from a widely used library, we decided to keep the current stable version and monitor updates instead of applying unsafe fixes.
+
+To improve long-term security, we implemented a GitHub Actions workflow that automatically runs ⁠ npm audit ⁠ on every push and pull request. This ensures that any future vulnerabilities are detected early and can be addressed safely.
+
+The workflow file is saved at .github/workflows/audit.yml and contains the following configuration:
+
+name: Dependency Security Audit
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 9 * * 1'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run security audit
+        run: npm audit --audit-level=moderate
+
+This runs on every push to main, every pull request, and every Monday morning automatically so new vulnerabilities are caught even when no code has changed.
