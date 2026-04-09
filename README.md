@@ -117,6 +117,25 @@ This route updates the currently authenticated user’s profile fields in the da
 
 We tested to see if the profile will update and it did not only the message said "Profile updated successfully" - but the new changes actually showed up in MongoDB Compass as well. 
 
+## CSRF Protection
+
+Cross-Site Request Forgery (CSRF) attacks trick an authenticated user's browser 
+into making an unintended request to the server. To prevent this, we use the 
+csurf middleware.
+
+CSRF protection is applied to three routes:
+•⁠  ⁠POST /login
+•⁠  ⁠POST /register
+•⁠  ⁠POST /update-profile
+
+On page load, the client fetches a unique token from GET /get-csrf-token and 
+stores it in memory. Every POST request includes this token in the CSRF-Token 
+request header. The server validates the token before processing the request — 
+if it is missing or incorrect, the request is rejected with a 403 error.
+
+Because the token is tied to the user's session and changes on every page load, 
+an attacker cannot forge a valid request from a third-party site.
+
 ## Input Validation and Sanitization
 
 After making the profile update form functional, the next step was ensuring that it only accepts safe and expected input. Since users can submit their own data, this part was important to prevent malformed or malicious values from being stored in the database.

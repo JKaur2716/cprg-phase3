@@ -190,6 +190,7 @@ const csrfProtection = csrf({ cookie: true });
 
 app.use("/login", csrfProtection);
 app.use("/register", csrfProtection);
+app.use("/update-profile", csrfProtection);
 
 app.get("/get-csrf-token", csrfProtection, (req, res) => {
   res.json({ csrfToken: req.csrfToken() });
