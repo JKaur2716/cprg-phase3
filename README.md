@@ -131,9 +131,12 @@ This ensured that only clean, expected data is accepted by the application and p
 
 Even with validation and sanitization in place, user input can still become dangerous if it is rendered directly in the browser without proper handling. To prevent this, we ensured that all profile data displayed on the dashboard is safely handled before being inserted into the page.
 
-Instead of injecting raw HTML, the application updates the interface using JavaScript text-based rendering. This avoids executing any unintended scripts that may have been submitted as input.
+Profile data (username, name, email, bio) is inserted into the DOM exclusively using element.innerText and element.textContent — never innerHTML. This means the browser always treats the value as plain text. A bio containing 
+<script>alert(1)</script> is displayed literally on screen rather than executed.
 
-By ensuring that user data is treated strictly as text and not executable code, we reduce the risk of Cross-Site Scripting (XSS) attacks. This step complements validation and sanitization by adding an additional layer of protection at the output stage.
+The project table rows are built using document.createElement and textContent assignments for every cell. This eliminates the risk of HTML injection through data fields, since no raw string is ever passed to innerHTML.
+
+On the server, express-validator's .escape() method encodes special characters  (< > & " ') into their HTML entity equivalents before values are stored in MongoDB. This provides a second layer of defence — even if client-side rendering were ever bypassed, the stored value itself cannot execute as HTML.
 
 ## Encryption of Sensitive Data
 
@@ -197,3 +200,4 @@ After submitting the profile update form with valid email and bio values, we che
 We then refreshed the dashboard, where the same values were displayed in a readable format. This confirmed that the application correctly decrypts the data before sending it to the frontend.
 
 This test verifies that sensitive user data is protected at rest while still remaining usable within the application.
+

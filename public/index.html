@@ -175,23 +175,46 @@
  
   const tbody = document.getElementById("rows");
  
-  projects.forEach(p => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-<td><input type="checkbox" class="cb" /></td>
-<td>${p.name}</td>
-<td>${p.client}</td>
-<td><span class="stage">${p.stage}</span></td>
-<td>
-<div class="progress-bar">
-<div class="progress-fill" style="width: ${p.progress}%"></div>
-</div>
-</td>
-<td class="date">MM/DD/YYYY</td>
-<td class="date">MM/DD/YYYY</td>
-    `;
-    tbody.appendChild(row);
-  });
+ projects.forEach(p => {
+  const row = document.createElement("tr");
+
+  const cbTd = document.createElement("td");
+  const cb = document.createElement("input");
+  cb.type = "checkbox"; cb.className = "cb";
+  cbTd.appendChild(cb);
+
+  const nameTd = document.createElement("td");
+  nameTd.textContent = p.name;
+
+  const clientTd = document.createElement("td");
+  clientTd.textContent = p.client;
+
+  const stageTd = document.createElement("td");
+  const stageSpan = document.createElement("span");
+  stageSpan.className = "stage";
+  stageSpan.textContent = p.stage;
+  stageTd.appendChild(stageSpan);
+
+  const progressTd = document.createElement("td");
+  const bar = document.createElement("div");
+  bar.className = "progress-bar";
+  const fill = document.createElement("div");
+  fill.className = "progress-fill";
+  fill.style.width = p.progress + "%";
+  bar.appendChild(fill);
+  progressTd.appendChild(bar);
+
+  const startTd = document.createElement("td");
+  startTd.className = "date";
+  startTd.textContent = "MM/DD/YYYY";
+
+  const endTd = document.createElement("td");
+  endTd.className = "date";
+  endTd.textContent = "MM/DD/YYYY";
+
+  row.append(cbTd, nameTd, clientTd, stageTd, progressTd, startTd, endTd);
+  tbody.appendChild(row);
+});
 
 
  async function loadUserProfile() {

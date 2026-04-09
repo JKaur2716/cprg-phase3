@@ -394,6 +394,7 @@ app.get("/profile", authenticateJWT, async (req, res) => {
   }
 });
 
+app.use("/update-profile", csrfProtection);
 app.post(
   "/update-profile",
   authenticateJWT,
