@@ -140,6 +140,8 @@ an attacker cannot forge a valid request from a third-party site.
 
 After making the profile update form functional, the next step was ensuring that it only accepts safe and expected input. Since users can submit their own data, this part was important to prevent malformed or malicious values from being stored in the database.
 
+On the /register route, password strength is enforced before the account is created. Passwords must be at least 8 characters long, contain at least one number, and contain at least one special character. Usernames must be between  3 and 30 characters. These rules prevent weak credentials from being stored and reduce the risk of brute-force attacks succeeding against common passwords.
+
 We implemented validation using the ⁠ express-validator ⁠ library in the ⁠ /update-profile ⁠ route. Each field was checked against strict rules based on the assignment requirements. The name field was limited to 3–50 alphabetic characters and spaces, the email field was validated using a standard email format, and the bio field was restricted to a maximum of 500 characters with only safe characters allowed.
 
 In addition to validation, we applied sanitization to all inputs. Values were trimmed to remove unnecessary whitespace, emails were normalized into a consistent format, and escaping was applied to reduce the risk of unsafe characters being stored directly.

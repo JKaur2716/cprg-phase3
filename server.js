@@ -279,6 +279,22 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Username and password required" });
     }
 
+    if (username.length < 3 || username.length > 30) {
+    return res.status(400).json({ error: "Username must be between 3 and 30 characters." });
+    }
+
+    if (password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+
+    if (!/[0-9]/.test(password)) {
+    return res.status(400).json({ error: "Password must contain at least one number." });
+    }
+
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    return res.status(400).json({ error: "Password must contain at least one special character." });
+    }
+
     const existingUser = await User.findOne({ username });
     if (existingUser) {
     return res.status(400).json({ error: "Registration failed. Please try again." });
