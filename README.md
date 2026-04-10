@@ -107,6 +107,17 @@ The dashboard interface and profile update form built in later steps both depend
 
 With the backend ready to serve profile data, the next step was building the dashboard interface that users see after logging in. The goal was to move beyond a basic post-login screen and display real, user-specific information pulled securely from the server.
 
+Fix: Back Button Session Protection
+After implementing logout, we identified that the browser's back button was displaying a cached snapshot of the dashboard even after the session was destroyed.
+The Fix: We added a pageshow event listener to index.html. Unlike DOMContentLoaded, pageshow fires even when the browser restores a page from its back/forward cache. On every page show, the listener makes a live request to the protected /profile route. If the JWT cookie is missing or expired, the server returns a non-OK response and the user is immediately redirected to login.html — before they can see any dashboard content.
+javascriptwindow.addEventListener('pageshow', async (event) => {
+  const response = await fetch('/profile');
+  if (!response.ok) {
+    window.location.href = '/login.html';
+  }
+});
+This ensures that logging out fully terminates access to the dashboard through all navigation methods, including the browser back button, not just direct URL visits.
+
 ### What was built
 
 *1. Profile data display* — The dashboard was updated to fetch the authenticated user's data from the protected ⁠ /profile ⁠ route and render it on the page. This includes the user's ⁠ username ⁠, ⁠ name ⁠, ⁠ email ⁠, and ⁠ bio ⁠, along with a personalized greeting. Because this data is loaded from the server after authentication, the page always reflects the currently logged-in user rather than any hard-coded or shared values.
