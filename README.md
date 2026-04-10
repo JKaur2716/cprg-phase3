@@ -2,7 +2,9 @@
 For Phase 3, we did not clone the repository from GitHub. Instead, we reused our Phase 2 project as a foundation and built on top of it.
 The Process: We duplicated our existing Phase 2 project folder locally and renamed it to cprg-phase3. This allowed us to retain all previously working functionality while continuing development without starting from scratch.
 Repository Creation: A new repository named cprg-phase3 was created on GitHub.
-Initial Push: After opening the duplicated project in VS Code, we initialized Git, connected the project to the new repository, and pushed the entire codebase as the initial Phase 3 commit.
+Initial Push: After opening the duplicated project in VS Code, we initialized Git, connected the project to the new repository, and pushed the entire codebase as the initial Phase 3 commit
+
+
 ## Key Insight
 One issue we encountered during this process was that the local repository was still linked to the Phase 2 remote. As a result, initial pushes were being sent to the wrong repository.
 The Fix: We updated the remote origin URL to point to the correct Phase 3 repository.
@@ -184,9 +186,24 @@ The script did not execute. Instead, it was stored and displayed in encoded form
 
 This confirms the input was treated as plain text rather than executable code. The protection comes from two places: ⁠ express-validator ⁠'s ⁠ .escape() ⁠ on the backend, which encodes special characters before they are stored, and safe frontend rendering, which outputs data as text rather than raw HTML.
 
-The project table is also built using createElement and textContent rather than 
-innerHTML, so even if a project name contained a script tag it would render as 
-visible text and never execute in the browser.
+The project table is also built using createElement and textContent rather than innerHTML, so even if a project name contained a script tag it would render as visible text and never execute in the browser.
+
+
+## SQL Injection Testing
+
+Because this application uses MongoDB with Mongoose, it is not vulnerable to traditional SQL injection attacks. MongoDB does not use SQL — queries are built as JavaScript objects, not concatenated strings — so there is no SQL parser to inject into.
+
+To verify this, we tested the login and registration fields with common SQL injection payloads:
+
+•⁠  ⁠⁠ ' OR '1'='1 ⁠
+•⁠  ⁠⁠ admin'-- ⁠
+•⁠  ⁠⁠ "; DROP TABLE users; -- ⁠
+
+None of these caused unexpected behaviour. Mongoose's query builder treats these strings as literal values and passes them safely to MongoDB as BSON documents. No query was manipulated.
+
+For NoSQL injection (which is the relevant threat for MongoDB), we also tested object injection by sending malformed JSON with operator keys such as ⁠ { "$gt": "" } ⁠ in the username field. The application rejected these because express-validator sanitizes and type-checks inputs before they reach the database layer.
+
+*Conclusion:* The combination of Mongoose's parameterized query model and express-validator input sanitization effectively prevents both SQL and NoSQL injection attacks.
 
 
 ### Input validation testing
@@ -258,3 +275,56 @@ jobs:
         run: npm audit --audit-level=moderate
 
 This runs on every push to main, every pull request, and every Monday morning automatically so new vulnerabilities are caught even when no code has changed.
+
+# AI Tools Used
+
+| AI Tool | Task | How We Verified |
+
+Claude (Anthropic) | Generated HTML structure for dashboard and login page styling | Manually reviewed all generated markup, tested rendering in browser, rewrote all route-level logic ourselves |
+Claude (Anthropic) | Generated GitHub Actions YAML workflow template | Read each step line by line, confirmed commands matched npm documentation, tested workflow ran successfully on push |
+Claude (Anthropic) | Suggested CSS layout patterns for sidebar and profile card | Visually tested in browser, adjusted spacing and colours manually |
+Claude (Anthropic) | Helped debug CSRF token fetch timing issue | Understood the async/await fix before applying it, tested with and without the fix |
+
+All security-critical code — including JWT middleware, session regeneration, encryption/decryption functions, input validation rules, and RBAC — was written and understood by us without direct AI generation.
+
+# Reflection Checkpoints
+
+## Part A – Dashboard
+*What challenges did you face ensuring only the logged-in user's data is displayed?*
+
+The main challenge was making sure the dashboard never fell back to cached or stale data from a previous session. We solved this by always fetching fresh data from the protected /profile route on every page load rather than storing anything in localStorage or sessionStorage. If the JWT is missing or expired, the fetch returns a non-OK status and the user is immediately redirected to login.html. This means the dashboard is always tied to the live authenticated session and cannot display another user's data.
+
+## Part B – Input Validation, Output Encoding, Encryption
+*What types of vulnerabilities can arise from improper input validation?*
+
+Without input validation, an attacker can submit scripts, oversized strings, or malformed data that gets stored in the database and later executed in another user's browser (stored XSS). They can also submit unexpected data types that cause server crashes or expose stack traces.In our case, accepting arbitrary characters in the bio field without length limits could allow someone to flood the database with enormous 
+payloads (a form of denial of service).
+
+*How does output encoding prevent XSS attacks?*
+
+Even if a malicious script somehow makes it into the database, output encoding stops it from executing in the browser. By inserting data exclusively through element.innerText and element.textContent — never innerHTML — the browser treats the value as plain text. A bio containing ⁠ <script>alert(1)</script> ⁠ is displayed literally on screen as those characters. The script never enters the DOM as executable code. The server-side .escape() call from express-validator adds a second layer — encoding < > & " ' into HTML entities before storage — so the data itself is harmless even if rendering behaviour ever changed.
+
+*What challenges did you encounter with encryption and how did you resolve them?*
+
+The main challenge was decryption consistency. AES-256-CBC requires the same IV that was used during encryption to decrypt correctly. Our first approach stored the IV separately, which made retrieval fragile. We resolved this by prepending the IV to the encrypted string as a hex prefix separated by a colon (iv:encryptedText), so the decrypt function always has everything it needs in a single database field. We also had to handle the case where a field is empty or already unencrypted (legacy data), which we solved with a format check — if the string does not contain a colon separator, it is returned as-is.
+
+## Part C – Dependency Management
+*Why is it risky to use outdated third-party libraries?*
+
+Outdated libraries may contain known vulnerabilities that are publicly documented in databases like the CVE registry. Once a vulnerability is published, attackers actively scan for applications still running the affected version. In our case, the csurf package depends on an older version of the cookie library with two low-severity vulnerabilities. Even though they are low severity now, severity can be reclassified as new exploit techniques emerge.
+
+*How does automation help with dependency management? What risks does it have?*
+
+Our GitHub Actions workflow runs npm audit on every push, every pull request, and every Monday morning. This means vulnerabilities are flagged immediately rather than discovered months later. The risk of automation is that it can create alert fatigue — if every PR triggers audit warnings that cannot be fixed without breaking changes, developers start ignoring them. Automated fixes (npm audit fix --force) can also silently introduce breaking changes by jumping major versions. Our approach mitigates this by setting --audit-level=moderate so only actionable issues trigger failures, and by reviewing release notes before applying any update manually.
+
+## Part D – Testing and Debugging
+*Which vulnerabilities were most challenging to address?*
+
+CSRF protection was the most complex to implement correctly because it required coordination between three parts of the application: the server issuing the token, the client fetching and storing it in memory, and every protected POST request including it in the header. A timing issue where the CSRF token fetch was not completed before the user submitted a form caused intermittent 403 errors during testing. We resolved this by making getCsrf() run immediately on page load and ensuring the submit handler always reads the module-level csrfToken variable rather than fetching inline.
+
+Session fixation was also non-trivial. Simply setting a new cookie on login was not enough — we had to call req.session.regenerate() to issue a new session identity at the infrastructure level, not just overwrite the cookie value.
+
+*What additional testing tools or strategies could improve the process?*
+
+OWASP ZAP (Zed Attack Proxy) would allow automated scanning of all routes for common vulnerabilities including XSS, CSRF, and injection — beyond the manual tests we ran. For automated regression testing, a tool like Supertest combined with Jest would let us write test cases that confirm validation rules and authentication guards still work after every code change. Burp Suite could be used to intercept and replay requests with modified headers to test CSRF and JWT edge cases more thoroughly.
+
