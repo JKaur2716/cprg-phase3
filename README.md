@@ -4,6 +4,16 @@ The Process: We duplicated our existing Phase 2 project folder locally and renam
 Repository Creation: A new repository named cprg-phase3 was created on GitHub.
 Initial Push: After opening the duplicated project in VS Code, we initialized Git, connected the project to the new repository, and pushed the entire codebase as the initial Phase 3 commit
 
+## Step 2 — Install dependencies
+⁠ bash
+npm install
+
+## Step 3 — Start the server
+⁠ bash
+node server.js
+
+We already had all of the certificates and .env file set up. 
+
 
 ## Key Insight
 One issue we encountered during this process was that the local repository was still linked to the Phase 2 remote. As a result, initial pushes were being sent to the wrong repository.
